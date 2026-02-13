@@ -1,0 +1,41 @@
+﻿@using ExamCorrection.Contracts.Reports
+@model IEnumerable<StudentsExportViewModel>
+
+<h2>Students Report</h2>
+<style>
+    body {
+        letter-spacing: 0.8px; /* adjust as needed */
+        font-size: 13px;
+        font-family: 'Arial', sans-serif;
+    }
+
+    table {
+        letter-spacing: 0.6px;
+    }
+</style>
+
+<table style="width:100%; border-collapse: collapse;" border="1">
+    <thead>
+        <tr>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Mobile</th>
+            <th>Class</th>
+            <th>Registered on</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in Model)
+        {
+            <tr>
+                <td>@s.FullName</td>
+                <td>@s.Email</td>
+                <td>@s.MobileNumber</td>
+                <td>@s.ClassName</td>
+                <td>@s.RegisteredOn.ToString("yyyy-MM-dd")</td>
+                <td>@(s.IsDisabled ? "Disabled" : "Active")</td>
+            </tr>
+        }
+    </tbody>
+</table>

@@ -1,0 +1,37 @@
+﻿@using ExamCorrection.Contracts.Reports
+@model IEnumerable<ClassesExportViewModel>
+
+<h2>تقرير الفصول</h2>
+<style>
+
+    body {
+        letter-spacing: 0.8px;
+        font-size: 13px;
+        font-family: 'Arial', sans-serif;
+    }
+
+    table {
+        letter-spacing: 0.6px;
+    }
+
+</style>
+
+<table style="width:100%; border-collapse: collapse;" border="1">
+    <thead>
+        <tr>
+            <th>الاسم</th>
+            <th>تم الإنشاء في</th>
+            <th>عدد الطلاب</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in Model)
+        {
+            <tr>
+                <td>@s.Name</td>
+                <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
+                <td>@s.NumberOfStudents</td>
+            </tr>
+        }
+    </tbody>
+</table>
