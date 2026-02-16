@@ -1,9 +1,9 @@
 ﻿namespace ExamCorrection.Contracts.Exam;
 
-public record UploadExamRequest(
-    IFormFile File,
-    string Title,
-    string Subject,
-    double X,
-    double Y
-);
+public class UploadExamRequest
+{
+    public required IFormFile File { get; set; }
+    public required string Title { get; set; }
+    public required string Subject { get; set; }
+    public string? BarcodeData { get; set; }
+}

@@ -30,3 +30,6 @@ global using ExamCorrection.Contracts.Profile;
 global using ExamCorrection.Extensions;
 global using ExamCorrection.Contracts.Exam;
 global using ExamCorrection.Contracts.ExternalApi;
+global using iText.Kernel.Font;
+global using iText.IO.Font;
+global using iText.IO.Font.Constants; // اختيارية ولكن مفيدة للخطوط الافتراضية

@@ -12,11 +12,11 @@ public class ExamAiService(
 {
     private readonly HttpClient _client = httpClientFactory.CreateClient("AI");
 
-    public async Task<Result<McqResponse>> ProcessExamAsync(IFormFile file)
+    public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file)
     {
         // 1️⃣ تأكد إن فيه ملف
         if (file == null)
-            return Result.Failure<McqResponse>(AiErrors.NoFilesProvided);
+            return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);
 
         // 2️⃣ Scan barcode
         using var scanContent = new MultipartFormDataContent();
@@ -24,18 +24,20 @@ public class ExamAiService(
 
         var scanResponse = await _client.PostAsync("http://76.13.51.15:8000/scan-barcode", scanContent);
         if (!scanResponse.IsSuccessStatusCode)
-            return Result.Failure<McqResponse>(AiErrors.ScanFailed);
+            return Result.Failure<ExamResultsDto>(AiErrors.ScanFailed);
 
         var scanData = await scanResponse.Content.ReadFromJsonAsync<ScanBarcodeResponse>();
         if (scanData == null || !scanData.Barcodes.Any())
-            return Result.Failure<McqResponse>(AiErrors.NoBarcodesFound);
+            return Result.Failure<ExamResultsDto>(AiErrors.NoBarcodesFound);
 
         var examId = int.Parse(scanData.Barcodes.First().ExamId);
 
         // 3️⃣ جلب الامتحان من DB
-        var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == examId);
+        var teacherExam = await _context.TeacherExams
+            .FirstOrDefaultAsync(x => x.ExamId == examId);
+
         if (teacherExam == null)
-            return Result.Failure<McqResponse>(AiErrors.ExamNotFoundInDb);
+            return Result.Failure<ExamResultsDto>(AiErrors.ExamNotFoundInDb);
 
         // 4️⃣ إرسال الملف للـ MCQ API
         using var mcqContent = new MultipartFormDataContent();
@@ -44,73 +46,86 @@ public class ExamAiService(
 
         var mcqResponse = await _client.PostAsync("http://76.13.51.15:8000/mcq", mcqContent);
         if (!mcqResponse.IsSuccessStatusCode)
-            return Result.Failure<McqResponse>(AiErrors.McqFailed);
+            return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
         var mcqData = await mcqResponse.Content.ReadFromJsonAsync<McqResponse>();
         if (mcqData == null)
-            return Result.Failure<McqResponse>(AiErrors.McqFailed);
+            return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
-        // 5️⃣ تعديل الصفوف الموجودة + إضافة جديدة
+        // 5️⃣ تعديل أو إضافة StudentExamPaper
         foreach (var res in mcqData.Results)
         {
-            // استخراج StudentId من اسم الملف
-            var studentIdStr = res.Filename.Split("(Student:")[1].Replace(")", "").Trim();
-            if (!int.TryParse(studentIdStr, out int studentId)) continue;
+            var studentIdStr = res.Filename.Split("(Student:")[1]
+                                           .Replace(")", "")
+                                           .Trim();
 
-            // تجاهل QueryFilter مؤقتًا
+            if (!int.TryParse(studentIdStr, out int studentId))
+                continue;
+
             var studentExam = await _context.StudentExamPapers
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
 
             if (studentExam != null)
             {
-                // ✅ تعديل الصفوف
                 studentExam.FinalScore = (float)res.Details.Score;
                 studentExam.TotalQuestions = res.Details.Total;
-                studentExam.QuestionDetailsJson = JsonSerializer.Serialize(res.Details.Details);
+                studentExam.QuestionDetailsJson =
+                    JsonSerializer.Serialize(res.Details.Details);
                 studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
-
-                Console.WriteLine($"Updated StudentExamPaper: StudentId={studentId}, Score={studentExam.FinalScore}");
             }
             else
             {
-                // ✅ إضافة صف جديد مع OwnerId
                 var exam = await _context.Exams.FindAsync(teacherExam.ExamId);
-                if (exam == null)
-                {
-                    Console.WriteLine($"Exam not found for ExamId={teacherExam.ExamId}");
+                if (exam == null || string.IsNullOrEmpty(exam.OwnerId))
                     continue;
-                }
-
-                var ownerId = exam.OwnerId;
-                if (string.IsNullOrEmpty(ownerId))
-                {
-                    Console.WriteLine($"OwnerId missing for ExamId={exam.Id}, skipping insert");
-                    continue; // نتجنب FK error
-                }
 
                 studentExam = new StudentExamPaper
                 {
                     ExamId = examId,
                     StudentId = studentId,
-                    OwnerId = ownerId, // ✅ FK safe
+                    OwnerId = exam.OwnerId,
                     GeneratedPdfPath = file.FileName,
                     GeneratedAt = DateTime.Now,
                     FinalScore = (float)res.Details.Score,
                     TotalQuestions = res.Details.Total,
-                    QuestionDetailsJson = JsonSerializer.Serialize(res.Details.Details),
+                    QuestionDetailsJson =
+                        JsonSerializer.Serialize(res.Details.Details),
                     AnnotatedImageUrl = res.AnnotatedImageUrl
                 };
 
                 _context.StudentExamPapers.Add(studentExam);
-                Console.WriteLine($"Added StudentExamPaper: StudentId={studentId}, Score={studentExam.FinalScore}");
             }
         }
 
-        // 6️⃣ حفظ التعديلات
         await _context.SaveChangesAsync();
 
-        // 7️⃣ رجعي نفس Response من AI
-        return Result.Success(mcqData);
+        // 6️⃣ Mapping النتيجة الجديدة
+        var examResults = new List<McqResultDto>();
+
+        foreach (var res in mcqData.Results)
+        {
+            var studentIdStr = res.Filename.Split("(Student:")[1]
+                                           .Replace(")", "")
+                                           .Trim();
+
+            int.TryParse(studentIdStr, out int studentId);
+
+            var student = await _context.Students.FindAsync(studentId);
+
+            examResults.Add(new McqResultDto(
+                Filename: res.Filename,
+                StudentInfo: new StudentInfoDto(
+                    StudentId: studentIdStr,
+                    StudentName: student?.FullName ?? "Unknown"
+                ),
+                Details: res.Details,
+                AnnotatedImageUrl: res.AnnotatedImageUrl,
+                ExamId: examId
+            ));
+        }
+
+        // 7️⃣ إرجاع DTO الصحيح
+        return Result.Success(new ExamResultsDto(examResults));
     }
 }

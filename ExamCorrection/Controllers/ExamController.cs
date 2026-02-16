@@ -34,8 +34,16 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadExam([FromForm] UploadExamRequest request)
     {
-        var result = await _examService.UploadExamPdfAsync(request);
-        return result.IsSuccess ? NoContent() : result.ToProblem();
+        try 
+        {
+            var result = await _examService.UploadExamPdfAsync(request);
+            return result.IsSuccess ? NoContent() : result.ToProblem();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UploadExam Exception] {ex}");
+            return Problem(detail: ex.ToString(), title: "Upload Failed Exception");
+        }
     }
 
     [HttpPost("generate-download-exams")]

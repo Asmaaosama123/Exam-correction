@@ -5,5 +5,5 @@ using Microsoft.AspNetCore.Http;
 
 public interface IExamAiService
 {
-    Task<Result<McqResponse>> ProcessExamAsync(IFormFile pdfFile);
+    Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file);
 }

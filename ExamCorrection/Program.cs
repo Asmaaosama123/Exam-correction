@@ -16,7 +16,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger"; // رابط الواجهة: /swagger/index.html
 });
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 // ⚠️ UseCors لازم يكون قبل UseAuthorization
 app.UseCors("myPolicy");
