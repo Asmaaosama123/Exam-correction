@@ -7,10 +7,12 @@ namespace ExamCorrection.Services;
 
 public class ExamAiService(
     ApplicationDbContext _context,
-    IHttpClientFactory httpClientFactory
+    IHttpClientFactory httpClientFactory,
+    IConfiguration _configuration
 ) : IExamAiService
 {
     private readonly HttpClient _client = httpClientFactory.CreateClient("AI");
+    private string BaseUrl => _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:8000";
 
     public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file)
     {
@@ -22,7 +24,7 @@ public class ExamAiService(
         using var scanContent = new MultipartFormDataContent();
         scanContent.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
 
-        var scanResponse = await _client.PostAsync("http://76.13.51.15:8000/scan-barcode", scanContent);
+        var scanResponse = await _client.PostAsync($"{BaseUrl}/scan-barcode", scanContent);
         if (!scanResponse.IsSuccessStatusCode)
             return Result.Failure<ExamResultsDto>(AiErrors.ScanFailed);
 
@@ -44,7 +46,7 @@ public class ExamAiService(
         mcqContent.Add(new StreamContent(file.OpenReadStream()), "files", file.FileName);
         mcqContent.Add(new StringContent(teacherExam.QuestionsJson), "model_config");
 
-        var mcqResponse = await _client.PostAsync("http://76.13.51.15:8000/mcq", mcqContent);
+        var mcqResponse = await _client.PostAsync($"{BaseUrl}/mcq", mcqContent);
         if (!mcqResponse.IsSuccessStatusCode)
             return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
@@ -55,9 +57,9 @@ public class ExamAiService(
         // 5️⃣ تعديل أو إضافة StudentExamPaper
         foreach (var res in mcqData.Results)
         {
-            var studentIdStr = res.Filename.Split("(Student:")[1]
-                                           .Replace(")", "")
-                                           .Trim();
+            var filename = res.Filename ?? "";
+            var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
+            var studentIdStr = studentIdPart.Replace(")", "").Trim();
 
             if (!int.TryParse(studentIdStr, out int studentId))
                 continue;
@@ -105,13 +107,19 @@ public class ExamAiService(
 
         foreach (var res in mcqData.Results)
         {
-            var studentIdStr = res.Filename.Split("(Student:")[1]
-                                           .Replace(")", "")
-                                           .Trim();
+            var filename = res.Filename ?? "";
+            var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
+            var studentIdStr = studentIdPart.Replace(")", "").Trim();
 
             int.TryParse(studentIdStr, out int studentId);
 
             var student = await _context.Students.FindAsync(studentId);
+
+            var imageUrl = res.AnnotatedImageUrl;
+            if (!string.IsNullOrEmpty(imageUrl) && !imageUrl.StartsWith("http"))
+            {
+                imageUrl = BaseUrl + "/" + imageUrl.TrimStart('/');
+            }
 
             examResults.Add(new McqResultDto(
                 Filename: res.Filename,
@@ -120,7 +128,7 @@ public class ExamAiService(
                     StudentName: student?.FullName ?? "Unknown"
                 ),
                 Details: res.Details,
-                AnnotatedImageUrl: res.AnnotatedImageUrl,
+                AnnotatedImageUrl: imageUrl,
                 ExamId: examId
             ));
         }

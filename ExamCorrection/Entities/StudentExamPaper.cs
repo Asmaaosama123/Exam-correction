@@ -10,7 +10,7 @@ public class StudentExamPaper
     public DateTime GeneratedAt { get; set; } = DateTime.Now;
     public float? FinalScore { get; set; }
     public int? TotalQuestions { get; set; } = 0;          // تبدأ من 0
-    public string? QuestionDetailsJson { get; set; } = "{}"; // تبدأ كـ JSON فارغ
+    public string? QuestionDetailsJson { get; set; } = "[]"; // تبدأ كـ JSON فارغ (قائمة)
     public string? AnnotatedImageUrl { get; set; } = "";   // تبدأ كسلسلة فارغة
 
     public Exam Exam { get; set; } = default!;

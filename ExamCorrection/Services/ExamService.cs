@@ -317,7 +317,7 @@ public class ExamService : IExamService
 
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
-                        .SetFontSize(16)
+                        .SetFontSize(12)
                         .SetFixedPosition(i, (float)pageX, (float)pageY + 35, 500);
                     doc.Add(namePara);
 
@@ -416,7 +416,7 @@ public class ExamService : IExamService
 
         // 3️⃣ حفظ الملف
         var uploadsFolder = Path.Combine(
-            _webHostEnvironment.ContentRootPath, "Uploads");
+            _webHostEnvironment.WebRootPath, "Uploads");
 
         Directory.CreateDirectory(uploadsFolder);
 
@@ -452,7 +452,7 @@ public class ExamService : IExamService
         // 5️⃣ Response
         return Result.Success(new TeacherExamResponse(
             teacherExam.ExamId,
-            teacherExam.PdfPath,
+            $"Uploads/{fileName}",
             teacherExam.QuestionsJson
         ));
     }

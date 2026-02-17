@@ -49,12 +49,21 @@ namespace ExamCorrection.Services
             var items = papers.Select(p => new GradingResultDto
             {
                 Id = p.Id,
+                StudentId = p.StudentId,
                 StudentName = p.Student.FullName,
+                ExamId = p.ExamId,
                 ExamName = p.Exam.Title,
                 ExamSubject = p.Exam.Subject,
+                ClassId = p.Student.ClassId,
                 ClassName = p.Student.Class.Name,
                 Grade = p.FinalScore,
-                GradedAt = p.GeneratedAt
+                MaxGrade = p.TotalQuestions,
+                GradedAt = p.GeneratedAt,
+                PdfPath = p.GeneratedPdfPath,
+                AnnotatedImageUrl = p.AnnotatedImageUrl,
+                QuestionDetails = (string.IsNullOrEmpty(p.QuestionDetailsJson) || p.QuestionDetailsJson == "{}")
+                    ? new List<QuestionDetailDto>() 
+                    : JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<QuestionDetailDto>()
             }).ToList();
 
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -62,6 +71,7 @@ namespace ExamCorrection.Services
             return new GradingResultsResponse
             {
                 Items = items,
+                PageNumber = pageNumber,
                 TotalCount = totalCount,
                 TotalPages = totalPages,
                 HasNextPage = pageNumber < totalPages,

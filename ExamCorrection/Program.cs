@@ -18,8 +18,9 @@ app.UseSwaggerUI(c =>
 
 //app.UseHttpsRedirection();
 
-// ⚠️ UseCors لازم يكون قبل UseAuthorization
 app.UseCors("myPolicy");
+
+app.UseStaticFiles();
 
 app.UseAuthorization();
 
