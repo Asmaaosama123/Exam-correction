@@ -68,11 +68,19 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
     [HttpPost("process")]
     public async Task<IActionResult> Process(IFormFile file)
     {
-        var result = await _examAiService.ProcessExamAsync(file);
+        try 
+        {
+            var result = await _examAiService.ProcessExamAsync(file);
 
-        return result.IsSuccess
-            ? Ok(result.Value)
-            : BadRequest(result.Error);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(result.Error);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Process Exception] {ex}");
+            return Problem(detail: ex.ToString(), title: "Processing Failed Exception");
+        }
     }
 
 }

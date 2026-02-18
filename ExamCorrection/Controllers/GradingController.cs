@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExamCorrection.Controllers
 {
     [ApiController]
-    [Route("api/Grading")]
+    [Route("api/[controller]")]
     public class GradingResultsController : ControllerBase
     {
         private readonly GradingService _gradingService;
