@@ -94,12 +94,45 @@ public class ExamAiService(
             foreach (var res in mcqData.Results)
             {
                 var filename = res.Filename ?? "";
-                var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
-                var studentIdStr = studentIdPart.Replace(")", "").Trim();
+                string studentIdStr = "";
+                int studentId = 0;
 
-                if (!int.TryParse(studentIdStr, out int studentId))
+                // Priority 1: Check StudentInfo from MCQ result
+                if (res.StudentInfo != null && int.TryParse(res.StudentInfo.StudentId, out int sIdFromInfo))
                 {
-                    Console.WriteLine($"[ProcessExam] Skipping result for student {studentIdStr} - Invalid ID format in filename {filename}");
+                    studentId = sIdFromInfo;
+                    studentIdStr = res.StudentInfo.StudentId;
+                }
+
+                // Priority 2: Fallback to filename parsing
+                if (studentId == 0)
+                {
+                    var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
+                    studentIdStr = studentIdPart.Replace(")", "").Trim();
+                    int.TryParse(studentIdStr, out studentId);
+                }
+
+                // Priority 3: Fallback to scanData if we have barcodes
+                // This supports both single image and stitched images (batch upload)
+                if (studentId == 0 && scanData.Barcodes.Any())
+                {
+                    // Try to map by index (assuming AI returns results in same order as barcodes - top to bottom)
+                    var index = mcqData.Results.IndexOf(res);
+                    if (index >= 0 && index < scanData.Barcodes.Count)
+                    {
+                        var barcode = scanData.Barcodes[index];
+                        if (barcode != null && int.TryParse(barcode.StudentId, out int sIdFromScan))
+                        {
+                            studentId = sIdFromScan;
+                            studentIdStr = barcode.StudentId;
+                            Console.WriteLine($"[ProcessExam] Recovered StudentId {studentId} from barcode index {index} for filename {filename}");
+                        }
+                    }
+                }
+
+                if (studentId == 0)
+                {
+                    Console.WriteLine($"[ProcessExam] Skipping result - Could not determine Student ID for filename {filename}");
                     continue;
                 }
 
@@ -155,10 +188,38 @@ public class ExamAiService(
             foreach (var res in mcqData.Results)
             {
                 var filename = res.Filename ?? "";
-                var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
-                var studentIdStr = studentIdPart.Replace(")", "").Trim();
+                string studentIdStr = "";
+                int studentId = 0;
 
-                int.TryParse(studentIdStr, out int studentId);
+                // Priority 1: Check StudentInfo from MCQ result
+                if (res.StudentInfo != null && int.TryParse(res.StudentInfo.StudentId, out int sIdFromInfo))
+                {
+                    studentId = sIdFromInfo;
+                    studentIdStr = res.StudentInfo.StudentId;
+                }
+
+                // Priority 2: Fallback to filename parsing
+                if (studentId == 0)
+                {
+                    var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
+                    studentIdStr = studentIdPart.Replace(")", "").Trim();
+                    int.TryParse(studentIdStr, out studentId);
+                }
+
+                // Priority 3: Fallback to scanData if we have barcodes
+                if (studentId == 0 && scanData.Barcodes.Any())
+                {
+                    var index = mcqData.Results.IndexOf(res);
+                    if (index >= 0 && index < scanData.Barcodes.Count)
+                    {
+                        var barcode = scanData.Barcodes[index];
+                        if (barcode != null && int.TryParse(barcode.StudentId, out int sIdFromScan))
+                        {
+                            studentId = sIdFromScan;
+                            studentIdStr = barcode.StudentId;
+                        }
+                    }
+                }
 
                 var student = await _context.Students.FindAsync(studentId);
 
