@@ -30,6 +30,11 @@ public static class Dependancies
      ));
 
 
+        services.Configure<FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = 104857600; // 100MB
+        });
+
         services.AddHttpContextAccessor();
         services.AddAuthenticationConfig(configuration);
 

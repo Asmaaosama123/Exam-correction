@@ -66,6 +66,7 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
             : Problem(detail: result.Error.Description, statusCode: result.Error.StatusCode);
     }
     [HttpPost("process")]
+    [RequestSizeLimit(104857600)] // 100MB
     public async Task<IActionResult> Process(IFormFile file)
     {
         try 
