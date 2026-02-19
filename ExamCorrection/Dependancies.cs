@@ -6,7 +6,11 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.OpenApi;
 using Refit;
 using System.Reflection;
-using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Features; // ضروري لـ FormOptions
+using Microsoft.EntityFrameworkCore;    // ضروري لـ UseSqlServer
+using System.Text;                      // ضروري لـ Encoding
+using Microsoft.IdentityModel.Tokens;   // ضروري لـ TokenValidationParameters
+// ... باقي الـ usings
 namespace ExamCorrection;
 
 public static class Dependancies
@@ -31,9 +35,11 @@ public static class Dependancies
 
 
         services.Configure<FormOptions>(options =>
-        {
-            options.MultipartBodyLengthLimit = 104857600; // 100MB
-        });
+{
+    options.MultipartBodyLengthLimit = 104857600; // 100MB
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
+});
 
         services.AddHttpContextAccessor();
         services.AddAuthenticationConfig(configuration);

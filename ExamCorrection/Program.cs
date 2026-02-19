@@ -1,4 +1,6 @@
-﻿using ExamCorrection;
+﻿
+using Microsoft.AspNetCore.Server.Kestrel.Core; // أضف هذا السطر في أعلى Program.cs
+using ExamCorrection;
 
 var builder = WebApplication.CreateBuilder(args);
 
