@@ -6,6 +6,7 @@ namespace ExamCorrection.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class GradingResultsController : ControllerBase
     {
         private readonly GradingService _gradingService;

@@ -30,6 +30,7 @@ app.UseCors("myPolicy");
 
 app.UseStaticFiles();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

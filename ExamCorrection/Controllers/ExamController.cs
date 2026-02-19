@@ -5,6 +5,7 @@ namespace ExamCorrection.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class ExamController(IExamService examService,IExamAiService examAiService) : ControllerBase
 {
     private readonly IExamService _examService = examService;

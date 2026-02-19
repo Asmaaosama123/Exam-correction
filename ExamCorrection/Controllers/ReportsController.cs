@@ -4,7 +4,7 @@ namespace ExamCorrection.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize]
 public class ReportsController(IReportService reportService) : ControllerBase
 {
     private readonly IReportService _reportService = reportService;
