@@ -310,8 +310,8 @@ public class ExamService : IExamService
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
                     barcode.SetCode(barcodeValue);
-                    barcode.SetBarHeight(60f);
-                    barcode.SetX(2.0f);
+                    barcode.SetBarHeight(50f);
+                    barcode.SetX(1.8f);
 
                     var img = new Image(barcode.CreateFormXObject(pdf))
                         .SetFixedPosition(i, (float)pageX, (float)pageY);
