@@ -310,8 +310,8 @@ public class ExamService : IExamService
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
                     barcode.SetCode(barcodeValue);
-                    barcode.SetBarHeight(50f);
-                    barcode.SetX(1.8f);
+                    barcode.SetBarHeight(40f);
+                    barcode.SetX(1.5f);
 
                     var img = new Image(barcode.CreateFormXObject(pdf))
                         .SetFixedPosition(i, (float)pageX, (float)pageY);
@@ -320,7 +320,7 @@ public class ExamService : IExamService
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
                         .SetFontSize(14)
-                        .SetFixedPosition(i, (float)pageX, (float)pageY + 60, 500);
+                        .SetFixedPosition(i, (float)pageX, (float)pageY + 50, 500);
                     doc.Add(namePara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });
