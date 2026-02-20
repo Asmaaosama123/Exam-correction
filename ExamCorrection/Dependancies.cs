@@ -145,20 +145,6 @@ public static class Dependancies
         return services;
     }
 
-    //private static IServiceCollection AddBackgroundJobsConfig(this IServiceCollection services, IConfiguration configuration)
-    //{
-    //    // Add Hangfire services.
-    //    services.AddHangfire(config => config
-    //        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    //        .UseSimpleAssemblyNameTypeSerializer()
-    //        .UseRecommendedSerializerSettings()
-    //        .UseSqlServerStorage(configuration.GetConnectionString("HangfireConnection")));
-
-    //    // Add the processing server as IHostedService
-    //    services.AddHangfireServer();
-
-    //    return services;    
-    //}
     private static IServiceCollection AddFluentValidationConfig(this IServiceCollection services)
     {
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

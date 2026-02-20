@@ -72,6 +72,30 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
     {
         try 
         {
+            // 🛑 التحقق من عدد الصفحات (بحد أقصى 50 صفحة)
+            if (file.ContentType == "application/pdf")
+            {
+                var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".pdf");
+                using (var stream = new FileStream(tempPath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                try 
+                {
+                    using var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(tempPath));
+                    var pageCount = pdf.GetNumberOfPages();
+                    if (pageCount > 50)
+                    {
+                        return BadRequest("لا يمكن معالجة أكثر من 50 صفحة في المرة الواحدة");
+                    }
+                }
+                finally
+                {
+                    if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
+                }
+            }
+
             var result = await _examAiService.ProcessExamAsync(file);
 
             return result.IsSuccess
