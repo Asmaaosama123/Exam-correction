@@ -36,7 +36,7 @@ public static class Dependancies
 
         services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 104857600; // 100MB
+    options.MultipartBodyLengthLimit = 524288000; // 500MB
     options.ValueLengthLimit = int.MaxValue;
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
@@ -54,6 +54,16 @@ public static class Dependancies
         services.AddScoped<IUserContext, UserContext>();
         services.AddScoped<GradingService>();
         services.AddScoped<IExamAiService, ExamAiService>();
+        services.AddHttpClient("AI", (sp, c) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config["ExamCorrectionAiModel:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("ExamCorrectionAiModel:BaseUrl is missing in appsettings.json");
+            c.BaseAddress = new Uri(baseUrl);
+            c.Timeout = TimeSpan.FromMinutes(5);
+        });
+
         services
     .AddRefitClient<IExamCorrectionClient>()
     .ConfigureHttpClient((sp, c) =>
@@ -66,6 +76,7 @@ public static class Dependancies
                 "ExamCorrectionAiModel:BaseUrl is missing in appsettings.json");
 
         c.BaseAddress = new Uri(baseUrl);
+        c.Timeout = TimeSpan.FromMinutes(5);
     });
 
 
