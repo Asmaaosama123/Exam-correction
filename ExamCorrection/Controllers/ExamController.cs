@@ -67,12 +67,12 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
             : Problem(detail: result.Error.Description, statusCode: result.Error.StatusCode);
     }
     [HttpPost("process")]
-    [RequestSizeLimit(1073741824)] // 1GB
+    [RequestSizeLimit(2147483648)] // 2GB
     public async Task<IActionResult> Process(IFormFile file)
     {
         try 
         {
-            // 🛑 التحقق من عدد الصفحات (بحد أقصى 50 صفحة)
+            // 🛑 التحقق من عدد الصفحات (بحد أقصى 1000 صفحة)
             if (file.ContentType == "application/pdf")
             {
                 var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".pdf");
@@ -85,9 +85,9 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
                 {
                     using var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(tempPath));
                     var pageCount = pdf.GetNumberOfPages();
-                    if (pageCount > 150)
+                    if (pageCount > 1000)
                     {
-                        return BadRequest("لا يمكن معالجة أكثر من 150 صفحة في المرة الواحدة");
+                        return BadRequest("لا يمكن معالجة أكثر من 1000 صفحة في المرة الواحدة");
                     }
                 }
                 finally

@@ -36,7 +36,7 @@ public static class Dependancies
 
         services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 1073741824; // 1GB
+    options.MultipartBodyLengthLimit = 2147483648; // 2GB
     options.ValueLengthLimit = int.MaxValue;
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
