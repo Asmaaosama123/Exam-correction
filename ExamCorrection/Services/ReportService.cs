@@ -105,7 +105,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
     {
         var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
         if (exam == null)
-            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود"));
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
 
         var results = await _context.StudentExamPapers
             .Include(p => p.Student)
