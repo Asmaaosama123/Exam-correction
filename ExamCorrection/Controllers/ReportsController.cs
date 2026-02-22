@@ -60,4 +60,17 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
     //    return File(fileContent, "application/octet-stream", fileName);
     //}
+
+    [HttpGet("report-exam-results-excel")]
+    public async Task<IActionResult> ExportExamResultsToExcel([FromQuery] int examId)
+    {
+        var result = await _reportService.ExportExamResultsToExcelAsync(examId);
+
+        if (!result.IsSuccess)
+            return BadRequest(result.Error);
+
+        var (fileContent, fileName) = result.Value;
+
+        return File(fileContent, "application/octet-stream", fileName);
+    }
 }
