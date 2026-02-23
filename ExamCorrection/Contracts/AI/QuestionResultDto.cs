@@ -22,5 +22,8 @@ public record QuestionResultDto(
     bool IsCorrect,
 
     [property: JsonPropertyName("method")]
-    string Method
+    string Method,
+
+    [property: JsonPropertyName("points")]
+    float Points // ✅ الجديد
 );

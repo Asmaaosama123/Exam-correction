@@ -183,16 +183,25 @@ public class ExamAiService(
                     continue;
                 }
 
-                Console.WriteLine($"[ProcessExam] Processing student record: ID={studentId}, filename={filename}");
-
-                // --- ✅ [جديد] إعادة حساب الدرجة بناءً على توزيع الدرجات المخصص ---
+                // --- ✅ [جديد] إعادة حساب الدرجة وبناء التفاصيل بالدرجات ---
                 float recalculatedScore = 0;
+                var enrichedDetails = new List<QuestionResultDto>();
+
                 foreach (var detail in res.Details.Details) {
-                    if (detail.IsCorrect && questionPointsMap.TryGetValue(detail.Id, out float pts)) {
-                        recalculatedScore += pts;
+                    float pts = 0;
+                    if (questionPointsMap.TryGetValue(detail.Id, out pts)) {
+                        if (detail.IsCorrect) {
+                            recalculatedScore += pts;
+                        }
+                    } else {
+                        pts = 1.0f; // Default if not found for some reason
+                        if (detail.IsCorrect) recalculatedScore += pts;
                     }
+
+                    // إضافة الدرجة لكائن التفاصيل
+                    enrichedDetails.Add(detail with { Points = pts });
                 }
-                // ------------------------------------------------------------------
+                // -----------------------------------------------------------
 
                 var studentExam = await _context.StudentExamPapers
                     .IgnoreQueryFilters()
@@ -200,10 +209,10 @@ public class ExamAiService(
 
                 if (studentExam != null)
                 {
-                    studentExam.FinalScore = recalculatedScore; // ✅ تم التعديل
+                    studentExam.FinalScore = recalculatedScore; // ✅ محسوب بالدرجات
                     studentExam.TotalQuestions = totalExamPoints; // ✅ المجموع الكلي المحسوب
                     studentExam.QuestionDetailsJson =
-                        JsonSerializer.Serialize(res.Details.Details);
+                        JsonSerializer.Serialize(enrichedDetails); // ✅ تم إضافة حقل points لكل سؤال
                     studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
                     Console.WriteLine($"[ProcessExam] Updated existing record for student {studentId}. New Score: {recalculatedScore}/{totalExamPoints}");
                 }
@@ -223,10 +232,10 @@ public class ExamAiService(
                         OwnerId = exam.OwnerId,
                         GeneratedPdfPath = file.FileName,
                         GeneratedAt = DateTime.Now,
-                        FinalScore = recalculatedScore, // ✅ تم التعديل
+                        FinalScore = recalculatedScore, // ✅ محسوب بالدرجات
                         TotalQuestions = totalExamPoints, // ✅ المجموع الكلي المحسوب
                         QuestionDetailsJson =
-                            JsonSerializer.Serialize(res.Details.Details),
+                            JsonSerializer.Serialize(enrichedDetails), // ✅ تم إضافة حقل points لكل سؤال
                         AnnotatedImageUrl = res.AnnotatedImageUrl
                     };
 

@@ -42,6 +42,9 @@ namespace ExamCorrection.Contracts.Grading
 
         [JsonPropertyName("method")]
         public string Method { get; set; } = string.Empty;
+
+        [JsonPropertyName("points")]
+        public float Points { get; set; } // ✅ الجديد
     }
 
     public class GradingResultsResponse
