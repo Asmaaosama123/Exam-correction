@@ -10,4 +10,5 @@ public interface IReportService
     Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync();
     Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId);
     Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId);
+    
 }

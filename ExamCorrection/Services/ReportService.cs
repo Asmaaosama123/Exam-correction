@@ -101,6 +101,64 @@ public class ReportService(ApplicationDbContext context) : IReportService
     //    return Result.Success((pdf.ToArray(), fileName)); ;
     //}
 
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId)
+    {
+        var exam = await _context.Exams.FindAsync(examId);
+        if (exam == null)
+            return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
+
+        var results = await _context.StudentExamPapers
+            .Include(x => x.Student)
+            .ThenInclude(x => x.Class)
+            .Where(x => x.ExamId == examId)
+            .OrderBy(x => x.Student.FullName)
+            .ToListAsync();
+
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("نتائج الاختبار");
+
+        var headers = new string[] { "ت", "اسم الطالب", "الفصل", "الدرجة", "إجمالي الأسئلة", "تاريخ التصحيح" };
+
+        for (int i = 0; i < headers.Length; i++)
+            sheet.Cell(1, i + 1).SetValue(headers[i]);
+
+        var headerRange = sheet.Range(1, 1, 1, headers.Length);
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+        headerRange.Style.Font.SetBold();
+        headerRange.Style.Font.SetFontSize(14);
+        headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        for (int rowIndex = 0; rowIndex < results.Count; rowIndex++)
+        {
+            var res = results[rowIndex];
+            int excelRow = rowIndex + 2;
+
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1); // Serial Number
+            sheet.Cell(excelRow, 2).SetValue(res.Student.FullName);
+            sheet.Cell(excelRow, 3).SetValue(res.Student.Class?.Name ?? "");
+            sheet.Cell(excelRow, 4).SetValue(res.FinalScore);
+            sheet.Cell(excelRow, 5).SetValue(res.TotalQuestions);
+            sheet.Cell(excelRow, 6).SetValue(res.GeneratedAt.ToString("yyyy-MM-dd HH:mm"));
+        }
+
+        sheet.Columns().AdjustToContents();
+        sheet.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sheet.CellsUsed().Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        sheet.CellsUsed().Style.Border.OutsideBorderColor = XLColor.Black;
+        sheet.CellsUsed().Style.Font.SetFontSize(12);
+
+        await using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var fileName = $"{exam.Title}_نتائج_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        return Result.Success((stream.ToArray(), fileName));
+    }
+
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
+    {
+        return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PDF.NotImplemented", "PDF Export for exams is not implemented yet."));
+    }
+
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync()
     {
         var classes = await _context.Classes
