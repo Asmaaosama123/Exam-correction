@@ -5,12 +5,20 @@ using Microsoft.AspNetCore.Components.Web;
 using Razor.Templating.Core;
 using System.IO;
 using System.Net.WebSockets;
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Kernel.Font;
+using iText.Layout.Properties;
+using iText.IO.Font;
+using Microsoft.AspNetCore.Hosting;
 
 namespace ExamCorrection.Services;
 
-public class ReportService(ApplicationDbContext context) : IReportService
+public class ReportService(ApplicationDbContext context, IWebHostEnvironment webHostEnvironment) : IReportService
 {
     private readonly ApplicationDbContext _context = context;
+    private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToExcelAsync(IEnumerable<int> classIds)
     {
@@ -105,8 +113,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
     {
         var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
         if (exam == null)
-return Result.Failure<(byte[] FileContent, string FileName)>(Error.Failure("ExamNotFound", "الاختبار غير موجود", 404));
-
+return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
         var results = await _context.StudentExamPapers
             .Include(p => p.Student)
             .Where(p => p.ExamId == examId)
@@ -156,6 +163,71 @@ return Result.Failure<(byte[] FileContent, string FileName)>(Error.Failure("Exam
         workbook.SaveAs(stream);
 
         var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        return Result.Success((stream.ToArray(), fileName));
+    }
+
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
+    {
+        var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
+        if (exam == null)
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
+
+        var results = await _context.StudentExamPapers
+            .Include(p => p.Student)
+            .Where(p => p.ExamId == examId)
+            .Select(p => new
+            {
+                StudentName = p.Student.FullName,
+                Score = p.FinalScore,
+                TotalQuestions = p.TotalQuestions,
+                GeneratedAt = p.GeneratedAt
+            })
+            .ToListAsync();
+
+        using var stream = new MemoryStream();
+        var writer = new PdfWriter(stream);
+        var pdf = new PdfDocument(writer);
+        var document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
+
+        var fontPath = Path.Combine(_webHostEnvironment.WebRootPath, "fonts", "arialbd.ttf");
+        var font = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+
+        document.SetFont(font);
+
+        var header = new Paragraph(ArabicTextShaper.Shape($"تقرير نتائج اختبار: {exam.Title}"))
+            .SetTextAlignment(TextAlignment.CENTER)
+            .SetFontSize(20);
+        document.Add(header);
+
+        document.Add(new Paragraph("\n"));
+
+        var table = new Table(UnitValue.CreatePercentArray(new float[] { 30, 20, 20, 30 }))
+            .UseAllAvailableWidth();
+
+        string[] headers = { "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
+        foreach (var h in headers)
+        {
+            table.AddHeaderCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(h)))
+                .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                .SetTextAlignment(TextAlignment.CENTER));
+        }
+
+        foreach (var r in results)
+        {
+            table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(r.StudentName)))
+                .SetTextAlignment(TextAlignment.RIGHT));
+            table.AddCell(new Cell().Add(new Paragraph((r.Score ?? 0).ToString()))
+                .SetTextAlignment(TextAlignment.CENTER));
+            table.AddCell(new Cell().Add(new Paragraph((r.TotalQuestions ?? 0).ToString()))
+                .SetTextAlignment(TextAlignment.CENTER));
+            table.AddCell(new Cell().Add(new Paragraph(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm")))
+                .SetTextAlignment(TextAlignment.CENTER));
+        }
+
+        document.Add(table);
+        document.Close();
+
+        var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
         return Result.Success((stream.ToArray(), fileName));
     }
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync()

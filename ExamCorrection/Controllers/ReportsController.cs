@@ -22,19 +22,6 @@ public class ReportsController(IReportService reportService) : ControllerBase
         return File(fileContent, "application/octet-stream", fileName);
     }
 
-    //[HttpGet("report-students-pdf")]
-    //public async Task<IActionResult> ExportStudentsToPdf([FromQuery] List<int> classIds)
-    //{
-    //    var result = await _reportService.ExportStudentsToPdfAsync(classIds);
-
-    //    if (!result.IsSuccess)
-    //        return BadRequest(result.Error);
-
-    //    var (fileContent, fileName) = result.Value;
-
-    //    return File(fileContent, "application/octet-stream",fileName);
-    //}
-
     [HttpGet("report-classes-excel")]
     public async Task<IActionResult> ExportClassesToExcel()
     {
@@ -48,23 +35,23 @@ public class ReportsController(IReportService reportService) : ControllerBase
         return File(fileContent, "application/octet-stream", fileName);
     }
 
-    //[HttpGet("report-classes-pdf")]
-    //public async Task<IActionResult> ExportClassesToPdf()
-    //{
-    //    var result = await _reportService.ExportClassesToPdfAsync();
-
-    //    if (!result.IsSuccess)
-    //        return BadRequest(result.Error);
-
-    //    var (fileContent, fileName) = result.Value;
-
-    //    return File(fileContent, "application/octet-stream", fileName);
-    //}
-
     [HttpGet("report-exam-results-excel")]
     public async Task<IActionResult> ExportExamResultsToExcel([FromQuery] int examId)
     {
         var result = await _reportService.ExportExamResultsToExcelAsync(examId);
+
+        if (!result.IsSuccess)
+            return BadRequest(result.Error);
+
+        var (fileContent, fileName) = result.Value;
+
+        return File(fileContent, "application/octet-stream", fileName);
+    }
+
+    [HttpGet("report-exam-results-pdf")]
+    public async Task<IActionResult> ExportExamResultsToPdf([FromQuery] int examId)
+    {
+        var result = await _reportService.ExportExamResultsToPdfAsync(examId);
 
         if (!result.IsSuccess)
             return BadRequest(result.Error);
