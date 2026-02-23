@@ -205,7 +205,7 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
 
         // --- Table Headers ---
         var tableStartRow = 7;
-        var headers = new string[] { "م", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
+        var headers = new string[] { "الرقم التسلسلي", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
 
         for (int i = 0; i < headers.Length; i++)
         {
