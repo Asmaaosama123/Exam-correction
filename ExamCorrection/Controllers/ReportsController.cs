@@ -8,6 +8,10 @@ namespace ExamCorrection.Controllers;
 public class ReportsController(IReportService reportService) : ControllerBase
 {
     private readonly IReportService _reportService = reportService;
+    
+    [HttpGet("ping")]
+    [AllowAnonymous]
+    public IActionResult Ping() => Ok("Reports Controller is reachable");
 
     [HttpGet("report-students-pdf")]
     public async Task<IActionResult> ExportStudentsToPdf([FromQuery] int[] classIds)

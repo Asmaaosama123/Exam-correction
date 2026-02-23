@@ -1,0 +1,55 @@
+@using ExamCorrection.Contracts.Reports
+@model ExamResultsExportViewModel
+
+<h2>تقرير نتائج الاختبار: @Model.ExamTitle</h2>
+<style>
+    body {
+        letter-spacing: 0.8px;
+        font-size: 13px;
+        font-family: 'Arial', sans-serif;
+        direction: rtl;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        border: 1px solid black;
+        padding: 8px;
+        text-align: center;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+</style>
+
+<div style="text-align: right; margin-bottom: 20px;">
+    <strong>المادة:</strong> @Model.Subject<br />
+    <strong>التاريخ:</strong> @DateTime.Now.ToString("yyyy-MM-dd")
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>م</th>
+            <th>الاسم كامل</th>
+            <th>الدرجة النهائية</th>
+            <th>عدد الأسئلة</th>
+            <th>تاريخ التصحيح</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{ int i = 1; }
+        @foreach (var r in Model.Results)
+        {
+            <tr>
+                <td>@(i++)</td>
+                <td>@r.StudentName</td>
+                <td>@r.Score</td>
+                <td>@r.TotalQuestions</td>
+                <td>@r.GeneratedAt.ToString("yyyy-MM-dd HH:mm")</td>
+            </tr>
+        }
+    </tbody>
+</table>
