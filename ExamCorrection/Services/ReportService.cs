@@ -31,7 +31,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("Students");
 
-        var headers = new string[] { "Full Name", "Email", "Mobile Number", "Class", "Status", "Registered On" };
+        var headers = new string[] { "ت", "Full Name", "Email", "Mobile Number", "Class", "Status", "Registered On" };
 
         for (int i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).SetValue(headers[i]);
@@ -47,14 +47,15 @@ public class ReportService(ApplicationDbContext context) : IReportService
             var s = students[rowIndex];
             int excelRow = rowIndex + 2;
 
-            sheet.Cell(excelRow, 1).SetValue(s.FullName);
-            sheet.Cell(excelRow, 2).SetValue(s.Email ?? "");
-            sheet.Cell(excelRow, 3).SetValue(s.MobileNumber ?? "");
-            sheet.Cell(excelRow, 4).SetValue(s.ClassName);
-            sheet.Cell(excelRow, 5).SetValue(s.IsDisabled ? "Disabled" : "Active");
-            sheet.Cell(excelRow, 6).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1); // Serial Number
+            sheet.Cell(excelRow, 2).SetValue(s.FullName);
+            sheet.Cell(excelRow, 3).SetValue(s.Email ?? "");
+            sheet.Cell(excelRow, 4).SetValue(s.MobileNumber ?? "");
+            sheet.Cell(excelRow, 5).SetValue(s.ClassName);
+            sheet.Cell(excelRow, 6).SetValue(s.IsDisabled ? "Disabled" : "Active");
+            sheet.Cell(excelRow, 7).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
 
-            var statusCell = sheet.Cell(excelRow, 5);
+            var statusCell = sheet.Cell(excelRow, 6);
             statusCell.Style.Fill.BackgroundColor = s.IsDisabled ? XLColor.Red : XLColor.Green;
         }
 
@@ -254,7 +255,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("الفصول");
 
-        var headers = new string[] { "الاسم", "تم الإنشاء في", "عدد الطلاب"};
+        var headers = new string[] { "ت", "الاسم", "تم الإنشاء في", "عدد الطلاب"};
 
         for (int i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).SetValue(headers[i]);
@@ -270,9 +271,10 @@ public class ReportService(ApplicationDbContext context) : IReportService
             var s = classes[rowIndex];
             int excelRow = rowIndex + 2;
 
-            sheet.Cell(excelRow, 1).SetValue(s.Name);
-            sheet.Cell(excelRow, 2).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
-            sheet.Cell(excelRow, 3).SetValue(s.numberOfStudents);
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1); // Serial Number
+            sheet.Cell(excelRow, 2).SetValue(s.Name);
+            sheet.Cell(excelRow, 3).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
+            sheet.Cell(excelRow, 4).SetValue(s.numberOfStudents);
         }
 
         sheet.Columns().AdjustToContents();

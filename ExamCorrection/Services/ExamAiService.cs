@@ -80,17 +80,28 @@ public class ExamAiService(
                 if (root.TryGetProperty("questions", out var questionsArr)) {
                     var cleanedQuestions = new List<object>();
                     foreach (var q in questionsArr.EnumerateArray()) {
-                        var qDict = JsonSerializer.Deserialize<Dictionary<string, object>>(q.GetRawText());
-                        if (qDict != null) {
-                            qDict.Remove("points"); // حذف حقل الدرجات
-                            cleanedQuestions.Add(qDict);
+                        var qDict = new Dictionary<string, object>();
+                        foreach (var prop in q.EnumerateObject()) {
+                            // إبقاء كل شيء ما عدا "points" (بأي حالة أحرف)
+                            if (!prop.Name.Equals("points", StringComparison.OrdinalIgnoreCase)) {
+                                qDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Number 
+                                    ? (object)prop.Value.GetDouble() 
+                                    : prop.Value.GetRawText().Trim().Replace("\"", "");
+                            }
+                        }
+                        cleanedQuestions.Add(qDict);
+                    }
+                    var configDict = new Dictionary<string, object>();
+                    foreach (var prop in root.EnumerateObject()) {
+                        if (prop.Name.Equals("questions", StringComparison.OrdinalIgnoreCase)) {
+                            configDict[prop.Name] = cleanedQuestions;
+                        } else {
+                            configDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Number 
+                                ? (object)prop.Value.GetDouble() 
+                                : prop.Value.GetRawText().Trim().Replace("\"", "");
                         }
                     }
-                    var configDict = JsonSerializer.Deserialize<Dictionary<string, object>>(teacherExam.QuestionsJson);
-                    if (configDict != null) {
-                        configDict["questions"] = cleanedQuestions;
-                        cleanedJson = JsonSerializer.Serialize(configDict);
-                    }
+                    cleanedJson = JsonSerializer.Serialize(configDict);
                 }
             } catch (Exception ex) {
                 Console.WriteLine($"[ProcessExam] Warning: Failed to clean JSON: {ex.Message}");
@@ -123,24 +134,27 @@ public class ExamAiService(
                 using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
                 if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
                     foreach (var q in questionsArr.EnumerateArray()) {
-                        string id = "";
-                        if (q.TryGetProperty("id", out var idProp)) {
-                            id = idProp.ValueKind == JsonValueKind.String 
-                                ? idProp.GetString()?.Trim() ?? "" 
-                                : idProp.GetRawText().Trim().Replace("\"", "");
-                        }
-
-                        if (string.IsNullOrEmpty(id)) continue;
-
+                        string qId = "";
                         float pts = 1.0f;
-                        if (q.TryGetProperty("points", out var ptProp)) {
-                            if (ptProp.ValueKind == JsonValueKind.Number)
-                                pts = (float)ptProp.GetDouble();
-                            else if (ptProp.ValueKind == JsonValueKind.String && float.TryParse(ptProp.GetString(), out var parsedPts))
-                                pts = parsedPts;
+                        foreach (var prop in q.EnumerateObject()) {
+                            if (prop.Name.Equals("id", StringComparison.OrdinalIgnoreCase)) {
+                                qId = prop.Value.ValueKind == JsonValueKind.String 
+                                    ? prop.Value.GetString()?.Trim() ?? "" 
+                                    : prop.Value.GetRawText().Trim().Replace("\"", "");
+                            }
+                            else if (prop.Name.Equals("points", StringComparison.OrdinalIgnoreCase)) {
+                                if (prop.Value.ValueKind == JsonValueKind.Number)
+                                    pts = (float)prop.Value.GetDouble();
+                                else if (prop.Value.ValueKind == JsonValueKind.String && float.TryParse(prop.Value.GetString(), out var parsedPts))
+                                    pts = parsedPts;
+                            }
                         }
-                        questionPointsMap[id] = pts;
-                        totalExamPoints += pts;
+
+                        if (!string.IsNullOrEmpty(qId)) {
+                             questionPointsMap[qId] = pts;
+                             totalExamPoints += pts;
+                             Console.WriteLine($"[ProcessExam] Mapping: ID={qId}, Pts={pts}");
+                        }
                     }
                 }
             } catch (Exception ex) {
