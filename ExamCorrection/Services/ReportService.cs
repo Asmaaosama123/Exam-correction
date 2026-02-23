@@ -71,35 +71,58 @@ public class ReportService(ApplicationDbContext context) : IReportService
         return Result.Success((stream.ToArray(), fileName));
     }
 
-    //public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToPdfAsync(IEnumerable<int> classIds)
-    //{
-    //    var students = await _context.Students
-    //        .Include(s => s.Class)
-    //        .Where(s => classIds.Contains(s.ClassId))
-    //        .Select(s => new StudentsExportViewModel
-    //        {
-    //            FullName = s.FullName,
-    //            Email = s.Email,
-    //            MobileNumber = s.MobileNumber,
-    //            ClassName = s.Class!.Name,
-    //            IsDisabled = s.IsDisabled,
-    //            RegisteredOn = s.CreatedAt
-    //        })
-    //        .ToListAsync();
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToPdfAsync(IEnumerable<int> classIds)
+    {
+        var students = await _context.Students
+            .Include(s => s.Class)
+            .Where(s => classIds.Contains(s.ClassId))
+            .OrderBy(s => s.FullName)
+            .ToListAsync();
 
-    //    var html = await RazorTemplateEngine.RenderAsync("Templates/StudentsTemplate.cshtml", students);
+        using var ms = new MemoryStream();
+        using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
+        {
+            var document = new iText.Layout.Document(pdf, iText.Kernel.Geom.PageSize.A4);
+            document.SetMargins(20, 20, 20, 20);
 
-    //    var pdf = Pdf.From(html)
-    //        .WithGlobalSetting("PaperSize", "A4")
-    //        .WithGlobalSetting("Orientation", "Portrait")
-    //        .WithGlobalSetting("DPI", "300")
-    //        .WithObjectSetting("WebSettings.DefaultEncoding", "utf-8")
-    //        .Content();
+            var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
+            var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
-    //    var fileName = $"Students_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تقرير الطلاب"))
+                .SetFont(font)
+                .SetFontSize(20)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
 
-    //    return Result.Success((pdf.ToArray(), fileName)); ;
-    //}
+            var table = new iText.Layout.Element.Table(6).UseAllAvailableWidth();
+            string[] headers = { "ت", "اسم الطالب", "البريد الإلكتروني", "رقم الهاتف", "الفصل", "الحالة" };
+
+            foreach (var header in headers.Reverse())
+            {
+                table.AddHeaderCell(new iText.Layout.Element.Cell()
+                    .Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(header)).SetFont(font))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < students.Count; i++)
+            {
+                var s = students[i];
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.IsDisabled ? "معطل" : "نشط")).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.Class?.Name ?? "")).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(s.MobileNumber ?? "").SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(s.Email ?? "").SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.FullName)).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph((i + 1).ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+        }
+
+        var fileName = $"Students_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        return Result.Success((ms.ToArray(), fileName));
+    }
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId)
     {
@@ -156,7 +179,64 @@ public class ReportService(ApplicationDbContext context) : IReportService
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
     {
-        return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PDF.NotImplemented", "PDF Export for exams is not implemented yet."));
+        var exam = await _context.Exams.FindAsync(examId);
+        if (exam == null)
+            return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
+
+        var results = await _context.StudentExamPapers
+            .Include(x => x.Student)
+            .ThenInclude(x => x.Class)
+            .Where(x => x.ExamId == examId)
+            .OrderBy(x => x.Student.FullName)
+            .ToListAsync();
+
+        using var ms = new MemoryStream();
+        using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
+        {
+            var document = new iText.Layout.Document(pdf, iText.Kernel.Geom.PageSize.A4);
+            document.SetMargins(20, 20, 20, 20);
+
+            var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
+            var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
+
+            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"نتائج اختبار: {exam.Title}"))
+                .SetFont(font)
+                .SetFontSize(20)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+
+            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject}"))
+                .SetFont(font)
+                .SetFontSize(14)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+
+            var table = new iText.Layout.Element.Table(5).UseAllAvailableWidth();
+            string[] headers = { "ت", "اسم الطالب", "الفصل", "الدرجة", "إجمالي الأسئلة" };
+
+            foreach (var header in headers.Reverse())
+            {
+                table.AddHeaderCell(new iText.Layout.Element.Cell()
+                    .Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(header)).SetFont(font))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                var res = results[i];
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(res.TotalQuestions.ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(res.FinalScore.ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(res.Student.Class?.Name ?? "")).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(res.Student.FullName)).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph((i + 1).ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+        }
+
+        var fileName = $"ExamResults_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        return Result.Success((ms.ToArray(), fileName));
     }
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync()
@@ -208,28 +288,53 @@ public class ReportService(ApplicationDbContext context) : IReportService
         return Result.Success((stream.ToArray(), fileName));
     }
 
-    //public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync()
-    //{
-    //    var classes = await _context.Classes
-    //       .Include(s => s.Students)
-    //       .Select(s => new ClassesExportViewModel
-    //       {
-    //           Name = s.Name,
-    //           CreatedAt = s.CreatedAt,
-    //           NumberOfStudents = s.Students.Count
-    //       })
-    //       .ToListAsync();
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync()
+    {
+        var classes = await _context.Classes
+           .Include(s => s.Students)
+           .OrderBy(s => s.Name)
+           .ToListAsync();
 
-    //    var html = await RazorTemplateEngine.RenderAsync("Templates/ClassesTemplate.cshtml", classes);
+        using var ms = new MemoryStream();
+        using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
+        {
+            var document = new iText.Layout.Document(pdf, iText.Kernel.Geom.PageSize.A4);
+            document.SetMargins(20, 20, 20, 20);
 
-    //    var pdf = Pdf.From(html)
-    //        .WithGlobalSetting("Orientation", "Portrait")
-    //        .WithGlobalSetting("DPI", "300")
-    //        .WithObjectSetting("WebSettings.DefaultEncoding", "utf-8")
-    //        .Content();
+            var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
+            var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
-    //    var fileName = $"الفصول_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تقرير الفصول"))
+                .SetFont(font)
+                .SetFontSize(20)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
 
-    //    return Result.Success((pdf.ToArray(), fileName)); ;
-    //}
+            var table = new iText.Layout.Element.Table(4).UseAllAvailableWidth();
+            string[] headers = { "ت", "اسم الفصل", "عدد الطلاب", "تاريخ الإنشاء" };
+
+            foreach (var header in headers.Reverse())
+            {
+                table.AddHeaderCell(new iText.Layout.Element.Cell()
+                    .Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(header)).SetFont(font))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < classes.Count; i++)
+            {
+                var c = classes[i];
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(c.CreatedAt.ToString("yyyy-MM-dd")).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(c.Students.Count.ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(c.Name)).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                table.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph((i + 1).ToString()).SetFont(font)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+        }
+
+        var fileName = $"Classes_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        return Result.Success((ms.ToArray(), fileName));
+    }
 }

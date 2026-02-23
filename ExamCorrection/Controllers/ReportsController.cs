@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Abstractions;
+using ExamCorrection.Abstractions;
 
 namespace ExamCorrection.Controllers;
 
@@ -23,7 +23,7 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/pdf", fileName);
     }
 
     [HttpGet("report-students-excel")]
@@ -36,7 +36,7 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpGet("report-classes-pdf")]
@@ -49,7 +49,7 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/pdf", fileName);
     }
 
     [HttpGet("report-classes-excel")]
@@ -62,7 +62,7 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpGet("report-exam-results-excel")]
@@ -75,10 +75,10 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
-    [HttpGet("exam-results-pdf")]
+    [HttpGet("report-exam-results-pdf")]
     public async Task<IActionResult> ExportExamResultsToPdf([FromQuery] int examId)
     {
         var result = await _reportService.ExportExamResultsToPdfAsync(examId);
@@ -88,6 +88,6 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         var (fileContent, fileName) = result.Value;
 
-        return File(fileContent, "application/octet-stream", fileName);
+        return File(fileContent, "application/pdf", fileName);
     }
 }
