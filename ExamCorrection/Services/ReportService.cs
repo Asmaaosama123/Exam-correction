@@ -199,7 +199,7 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        var fileName = $"{exam.Title}.xlsx";
         return Result.Success((stream.ToArray(), fileName));
     }
 
@@ -320,12 +320,13 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
             document.Add(table);
             document.Close();
 
-            var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            var fileName = $"{exam.Title}.pdf";
             return Result.Success((stream.ToArray(), fileName));
         }
         catch (Exception ex)
         {
-            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PdfGenerationError", $"An error occurred during PDF generation: {ex.Message}", 500));
+            // Log full exception details if possible, or return them in the error
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PdfGenerationError", $"Details: {ex.Message} | Stack: {ex.StackTrace}", 500));
         }
     }
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync()

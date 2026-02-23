@@ -48,7 +48,7 @@ public class ReportsController(IReportService reportService) : ControllerBase
         return File(fileContent, "application/octet-stream", fileName);
     }
 
-    [HttpGet("report-exam-results-pdf")]
+    [HttpGet("exam-results-pdf")]
     public async Task<IActionResult> ExportExamResultsToPdf([FromQuery] int examId)
     {
         var result = await _reportService.ExportExamResultsToPdfAsync(examId);
