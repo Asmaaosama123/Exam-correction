@@ -71,7 +71,33 @@ public class ExamAiService(
             Console.WriteLine("[ProcessExam] Sending to /mcq API...");
             using var mcqContent = new MultipartFormDataContent();
             mcqContent.Add(new StreamContent(file.OpenReadStream()), "files", file.FileName);
-            mcqContent.Add(new StringContent(teacherExam.QuestionsJson), "model_config");
+            
+            // --- ✅ [جديد] تنظيف الـ JSON قبل إرساله للـ AI لضمان عدم حدوث أخطاء ---
+            string cleanedJson = teacherExam.QuestionsJson;
+            try {
+                using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("questions", out var questionsArr)) {
+                    var cleanedQuestions = new List<object>();
+                    foreach (var q in questionsArr.EnumerateArray()) {
+                        var qDict = JsonSerializer.Deserialize<Dictionary<string, object>>(q.GetRawText());
+                        if (qDict != null) {
+                            qDict.Remove("points"); // حذف حقل الدرجات
+                            cleanedQuestions.Add(qDict);
+                        }
+                    }
+                    var configDict = JsonSerializer.Deserialize<Dictionary<string, object>>(teacherExam.QuestionsJson);
+                    if (configDict != null) {
+                        configDict["questions"] = cleanedQuestions;
+                        cleanedJson = JsonSerializer.Serialize(configDict);
+                    }
+                }
+            } catch (Exception ex) {
+                Console.WriteLine($"[ProcessExam] Warning: Failed to clean JSON: {ex.Message}");
+            }
+            // ------------------------------------------------------------------
+
+            mcqContent.Add(new StringContent(cleanedJson), "model_config");
 
             var mcqResponse = await _client.PostAsync($"{BaseUrl}/mcq", mcqContent);
             if (!mcqResponse.IsSuccessStatusCode)
@@ -89,6 +115,27 @@ public class ExamAiService(
             }
 
             Console.WriteLine($"[ProcessExam] MCQ success. Processing {mcqData.Results.Count} results.");
+
+            // --- ✅ [جديد] تحضير خريطة الدرجات من الـ JSON الأصلي ---
+            var questionPointsMap = new Dictionary<string, float>();
+            float totalExamPoints = 0;
+            try {
+                using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
+                if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
+                    foreach (var q in questionsArr.EnumerateArray()) {
+                        string id = q.GetProperty("id").GetString() ?? "";
+                        float pts = 1.0f;
+                        if (q.TryGetProperty("points", out var ptProp)) {
+                            pts = (float)ptProp.GetDouble();
+                        }
+                        questionPointsMap[id] = pts;
+                        totalExamPoints += pts;
+                    }
+                }
+            } catch (Exception ex) {
+                Console.WriteLine($"[ProcessExam] Error parsing points map: {ex.Message}");
+            }
+            // -----------------------------------------------------------
 
             // 5️⃣ تعديل أو إضافة StudentExamPaper
             foreach (var res in mcqData.Results)
@@ -138,18 +185,27 @@ public class ExamAiService(
 
                 Console.WriteLine($"[ProcessExam] Processing student record: ID={studentId}, filename={filename}");
 
+                // --- ✅ [جديد] إعادة حساب الدرجة بناءً على توزيع الدرجات المخصص ---
+                float recalculatedScore = 0;
+                foreach (var detail in res.Details.Details) {
+                    if (detail.IsCorrect && questionPointsMap.TryGetValue(detail.Id, out float pts)) {
+                        recalculatedScore += pts;
+                    }
+                }
+                // ------------------------------------------------------------------
+
                 var studentExam = await _context.StudentExamPapers
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
 
                 if (studentExam != null)
                 {
-                    studentExam.FinalScore = (float)res.Details.Score;
-                    studentExam.TotalQuestions = res.Details.Total;
+                    studentExam.FinalScore = recalculatedScore; // ✅ تم التعديل
+                    studentExam.TotalQuestions = totalExamPoints; // ✅ المجموع الكلي المحسوب
                     studentExam.QuestionDetailsJson =
                         JsonSerializer.Serialize(res.Details.Details);
                     studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
-                    Console.WriteLine($"[ProcessExam] Updated existing record for student {studentId}");
+                    Console.WriteLine($"[ProcessExam] Updated existing record for student {studentId}. New Score: {recalculatedScore}/{totalExamPoints}");
                 }
                 else
                 {
@@ -167,15 +223,15 @@ public class ExamAiService(
                         OwnerId = exam.OwnerId,
                         GeneratedPdfPath = file.FileName,
                         GeneratedAt = DateTime.Now,
-                        FinalScore = (float)res.Details.Score,
-                        TotalQuestions = res.Details.Total,
+                        FinalScore = recalculatedScore, // ✅ تم التعديل
+                        TotalQuestions = totalExamPoints, // ✅ المجموع الكلي المحسوب
                         QuestionDetailsJson =
                             JsonSerializer.Serialize(res.Details.Details),
                         AnnotatedImageUrl = res.AnnotatedImageUrl
                     };
 
                     _context.StudentExamPapers.Add(studentExam);
-                    Console.WriteLine($"[ProcessExam] Created new record for student {studentId}");
+                    Console.WriteLine($"[ProcessExam] Created new record for student {studentId}. Score: {recalculatedScore}/{totalExamPoints}");
                 }
             }
 

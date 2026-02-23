@@ -13,7 +13,7 @@ namespace ExamCorrection.Contracts.Grading
         public int ClassId { get; set; }
         public string ClassName { get; set; } = string.Empty;
         public float? Grade { get; set; }
-        public int? MaxGrade { get; set; }
+        public float? MaxGrade { get; set; }
         public DateTime GradedAt { get; set; }
         public string? PdfPath { get; set; }
         public string? AnnotatedImageUrl { get; set; }
