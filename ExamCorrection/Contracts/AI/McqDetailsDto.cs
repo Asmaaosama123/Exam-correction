@@ -4,10 +4,10 @@ namespace ExamCorrection.Contracts.AI;
 
 public record McqDetailsDto(
     [property: JsonPropertyName("score")]
-    int Score,
+    float Score,
 
     [property: JsonPropertyName("total")]
-    int Total,
+    float Total,
 
     [property: JsonPropertyName("details")]
     List<QuestionResultDto> Details

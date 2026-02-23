@@ -137,117 +137,7 @@ public class ExamAiService(
             }
             // -----------------------------------------------------------
 
-            // 5️⃣ تعديل أو إضافة StudentExamPaper
-            foreach (var res in mcqData.Results)
-            {
-                var filename = res.Filename ?? "";
-                string studentIdStr = "";
-                int studentId = 0;
-
-                // Priority 1: Check StudentInfo from MCQ result
-                if (res.StudentInfo != null && int.TryParse(res.StudentInfo.StudentId, out int sIdFromInfo))
-                {
-                    studentId = sIdFromInfo;
-                    studentIdStr = res.StudentInfo.StudentId;
-                }
-
-                // Priority 2: Fallback to filename parsing
-                if (studentId == 0)
-                {
-                    var studentIdPart = filename.Contains("(Student:") ? filename.Split("(Student:")[1] : "";
-                    studentIdStr = studentIdPart.Replace(")", "").Trim();
-                    int.TryParse(studentIdStr, out studentId);
-                }
-
-                // Priority 3: Fallback to scanData if we have barcodes
-                // This supports both single image and stitched images (batch upload)
-                if (studentId == 0 && scanData.Barcodes.Any())
-                {
-                    // Try to map by index (assuming AI returns results in same order as barcodes - top to bottom)
-                    var index = mcqData.Results.IndexOf(res);
-                    if (index >= 0 && index < scanData.Barcodes.Count)
-                    {
-                        var barcode = scanData.Barcodes[index];
-                        if (barcode != null && int.TryParse(barcode.StudentId, out int sIdFromScan))
-                        {
-                            studentId = sIdFromScan;
-                            studentIdStr = barcode.StudentId;
-                            Console.WriteLine($"[ProcessExam] Recovered StudentId {studentId} from barcode index {index} for filename {filename}");
-                        }
-                    }
-                }
-
-                if (studentId == 0)
-                {
-                    Console.WriteLine($"[ProcessExam] Skipping result - Could not determine Student ID for filename {filename}");
-                    continue;
-                }
-
-                // --- ✅ [جديد] إعادة حساب الدرجة وبناء التفاصيل بالدرجات ---
-                float recalculatedScore = 0;
-                var enrichedDetails = new List<QuestionResultDto>();
-
-                foreach (var detail in res.Details.Details) {
-                    float pts = 0;
-                    if (questionPointsMap.TryGetValue(detail.Id, out pts)) {
-                        if (detail.IsCorrect) {
-                            recalculatedScore += pts;
-                        }
-                    } else {
-                        pts = 1.0f; // Default if not found for some reason
-                        if (detail.IsCorrect) recalculatedScore += pts;
-                    }
-
-                    // إضافة الدرجة لكائن التفاصيل
-                    enrichedDetails.Add(detail with { Points = pts });
-                }
-                // -----------------------------------------------------------
-
-                var studentExam = await _context.StudentExamPapers
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
-
-                if (studentExam != null)
-                {
-                    studentExam.FinalScore = recalculatedScore; // ✅ محسوب بالدرجات
-                    studentExam.TotalQuestions = totalExamPoints; // ✅ المجموع الكلي المحسوب
-                    studentExam.QuestionDetailsJson =
-                        JsonSerializer.Serialize(enrichedDetails); // ✅ تم إضافة حقل points لكل سؤال
-                    studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
-                    Console.WriteLine($"[ProcessExam] Updated existing record for student {studentId}. New Score: {recalculatedScore}/{totalExamPoints}");
-                }
-                else
-                {
-                    var exam = await _context.Exams.FindAsync(teacherExam.ExamId);
-                    if (exam == null || string.IsNullOrEmpty(exam.OwnerId))
-                    {
-                        Console.WriteLine($"[ProcessExam] Skipping result for student {studentId} - Exam not found or missing OwnerId");
-                        continue;
-                    }
-
-                    studentExam = new StudentExamPaper
-                    {
-                        ExamId = examId,
-                        StudentId = studentId,
-                        OwnerId = exam.OwnerId,
-                        GeneratedPdfPath = file.FileName,
-                        GeneratedAt = DateTime.Now,
-                        FinalScore = recalculatedScore, // ✅ محسوب بالدرجات
-                        TotalQuestions = totalExamPoints, // ✅ المجموع الكلي المحسوب
-                        QuestionDetailsJson =
-                            JsonSerializer.Serialize(enrichedDetails), // ✅ تم إضافة حقل points لكل سؤال
-                        AnnotatedImageUrl = res.AnnotatedImageUrl
-                    };
-
-                    _context.StudentExamPapers.Add(studentExam);
-                    Console.WriteLine($"[ProcessExam] Created new record for student {studentId}. Score: {recalculatedScore}/{totalExamPoints}");
-                }
-            }
-
-            await _context.SaveChangesAsync();
-            Console.WriteLine("[ProcessExam] Database changes saved successfully.");
-
-            // 6️⃣ Mapping النتيجة الجديدة
+            // 5️⃣ تعديل أو إضافة StudentExamPaper + تحضير النتيجة الراجعة
             var examResults = new List<McqResultDto>();
 
             foreach (var res in mcqData.Results)
@@ -286,8 +176,62 @@ public class ExamAiService(
                     }
                 }
 
-                var student = await _context.Students.FindAsync(studentId);
+                if (studentId == 0)
+                {
+                    Console.WriteLine($"[ProcessExam] Skipping result - Could not determine Student ID for filename {filename}");
+                    continue;
+                }
 
+                // --- ✅ [جديد] إعادة حساب الدرجة وبناء التفاصيل بالدرجات ---
+                float recalculatedScore = 0;
+                var enrichedDetails = new List<QuestionResultDto>();
+
+                foreach (var detail in res.Details.Details) {
+                    float pts = 0;
+                    if (questionPointsMap.TryGetValue(detail.Id, out pts)) {
+                        if (detail.IsCorrect) recalculatedScore += pts;
+                    } else {
+                        pts = 1.0f; 
+                        if (detail.IsCorrect) recalculatedScore += pts;
+                    }
+                    enrichedDetails.Add(detail with { Points = pts });
+                }
+                // -----------------------------------------------------------
+
+                var studentExam = await _context.StudentExamPapers
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
+
+                if (studentExam != null)
+                {
+                    studentExam.FinalScore = recalculatedScore;
+                    studentExam.TotalQuestions = totalExamPoints;
+                    studentExam.QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails);
+                    studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
+                }
+                else
+                {
+                    var exam = await _context.Exams.FindAsync(teacherExam.ExamId);
+                    if (exam != null)
+                    {
+                        studentExam = new StudentExamPaper
+                        {
+                            ExamId = examId,
+                            StudentId = studentId,
+                            OwnerId = exam.OwnerId,
+                            GeneratedPdfPath = file.FileName,
+                            GeneratedAt = DateTime.Now,
+                            FinalScore = recalculatedScore,
+                            TotalQuestions = totalExamPoints,
+                            QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails),
+                            AnnotatedImageUrl = res.AnnotatedImageUrl
+                        };
+                        _context.StudentExamPapers.Add(studentExam);
+                    }
+                }
+
+                // Mapping للنتيجة الراجعة للـ UI
+                var student = await _context.Students.FindAsync(studentId);
                 var imageUrl = res.AnnotatedImageUrl;
                 if (!string.IsNullOrEmpty(imageUrl) && !imageUrl.StartsWith("http"))
                 {
@@ -300,18 +244,23 @@ public class ExamAiService(
                         StudentId: studentIdStr,
                         StudentName: student?.FullName ?? "Unknown"
                     ),
-                    Details: res.Details,
+                    Details: new McqDetailsDto(
+                        Score: recalculatedScore, 
+                        Total: totalExamPoints,
+                        Details: enrichedDetails
+                    ),
                     AnnotatedImageUrl: imageUrl,
                     ExamId: examId
                 ));
             }
 
+            await _context.SaveChangesAsync();
             return Result.Success(new ExamResultsDto(examResults));
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[ProcessExam Exception] {ex}");
-            throw; // Re-throw to be caught by controller's generic catch
+            throw;
         }
     }
 }
