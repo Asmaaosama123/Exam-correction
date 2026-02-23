@@ -117,16 +117,27 @@ public class ExamAiService(
             Console.WriteLine($"[ProcessExam] MCQ success. Processing {mcqData.Results.Count} results.");
 
             // --- ✅ [جديد] تحضير خريطة الدرجات من الـ JSON الأصلي ---
-            var questionPointsMap = new Dictionary<string, float>();
+            var questionPointsMap = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             float totalExamPoints = 0;
             try {
                 using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
                 if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
                     foreach (var q in questionsArr.EnumerateArray()) {
-                        string id = q.GetProperty("id").GetString() ?? "";
+                        string id = "";
+                        if (q.TryGetProperty("id", out var idProp)) {
+                            id = idProp.ValueKind == JsonValueKind.String 
+                                ? idProp.GetString()?.Trim() ?? "" 
+                                : idProp.GetRawText().Trim().Replace("\"", "");
+                        }
+
+                        if (string.IsNullOrEmpty(id)) continue;
+
                         float pts = 1.0f;
                         if (q.TryGetProperty("points", out var ptProp)) {
-                            pts = (float)ptProp.GetDouble();
+                            if (ptProp.ValueKind == JsonValueKind.Number)
+                                pts = (float)ptProp.GetDouble();
+                            else if (ptProp.ValueKind == JsonValueKind.String && float.TryParse(ptProp.GetString(), out var parsedPts))
+                                pts = parsedPts;
                         }
                         questionPointsMap[id] = pts;
                         totalExamPoints += pts;
@@ -188,7 +199,8 @@ public class ExamAiService(
 
                 foreach (var detail in res.Details.Details) {
                     float pts = 0;
-                    if (questionPointsMap.TryGetValue(detail.Id, out pts)) {
+                    string detailId = detail.Id?.Trim() ?? "";
+                    if (questionPointsMap.TryGetValue(detailId, out pts)) {
                         if (detail.IsCorrect) recalculatedScore += pts;
                     } else {
                         pts = 1.0f; 
