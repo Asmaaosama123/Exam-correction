@@ -113,66 +113,6 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
     {
         var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
         if (exam == null)
-return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
-        var results = await _context.StudentExamPapers
-            .Include(p => p.Student)
-                .ThenInclude(s => s.Class)
-            .Where(p => p.ExamId == examId)
-            .Select(p => new
-            {
-                StudentName = p.Student.FullName,
-                ClassName = p.Student.Class.Name,
-                Score = p.FinalScore,
-                TotalQuestions = p.TotalQuestions,
-                GeneratedAt = p.GeneratedAt
-            })
-            .ToListAsync();
-
-        using var workbook = new XLWorkbook();
-        var sheet = workbook.AddWorksheet("نتائج الاختبار");
-
-        sheet.RightToLeft = true;
-
-        var headers = new string[] { "م", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
-
-        for (int i = 0; i < headers.Length; i++)
-            sheet.Cell(1, i + 1).SetValue(headers[i]);
-
-        var headerRange = sheet.Range(1, 1, 1, headers.Length);
-        headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
-        headerRange.Style.Font.SetBold();
-        headerRange.Style.Font.SetFontSize(14);
-        headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-
-        for (int rowIndex = 0; rowIndex < results.Count; rowIndex++)
-        {
-            var r = results[rowIndex];
-            int excelRow = rowIndex + 2;
-
-            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1);
-            sheet.Cell(excelRow, 2).SetValue(r.StudentName);
-            sheet.Cell(excelRow, 3).SetValue(r.Score ?? 0);
-            sheet.Cell(excelRow, 4).SetValue(r.TotalQuestions ?? 0);
-            sheet.Cell(excelRow, 5).SetValue(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm"));
-        }
-
-        sheet.Columns().AdjustToContents();
-        sheet.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        sheet.CellsUsed().Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-        sheet.CellsUsed().Style.Border.OutsideBorderColor = XLColor.Black;
-        sheet.CellsUsed().Style.Font.SetFontSize(12);
-
-        await using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-
-        var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
-        return Result.Success((stream.ToArray(), fileName));
-    }
-
-    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
-    {
-        var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
-        if (exam == null)
             return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
 
         var results = await _context.StudentExamPapers
@@ -189,100 +129,204 @@ return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotF
             })
             .ToListAsync();
 
-        using var stream = new MemoryStream();
-        var writer = new PdfWriter(stream);
-        var pdf = new PdfDocument(writer);
-        var document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("نتائج الاختبار");
 
-        var fontPath = Path.Combine(_webHostEnvironment.WebRootPath, "fonts", "arialbd.ttf");
-        var font = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+        sheet.RightToLeft = true;
 
-        document.SetFont(font);
+        // --- Header Section ---
+        // Right Section (School Info)
+        sheet.Cell(1, 1).SetValue("المملكة العربية السعودية");
+        sheet.Cell(2, 1).SetValue("وزارة التعليم");
+        sheet.Cell(3, 1).SetValue("الإدارة العامة للتعليم بمنطقة الباحة");
+        sheet.Cell(4, 1).SetValue("متوسطة الأمير فيصل بالعقيق");
 
-        // Header Table (3 columns)
-        var headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 35, 30, 35 }))
-            .UseAllAvailableWidth()
-            .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+        // Center Section (Title)
+        var titleCell = sheet.Cell(3, 3);
+        titleCell.SetValue($"كشف رصد درجات مادة {exam.Subject} للفصل");
+        titleCell.Style.Font.SetBold().Font.SetFontSize(16).Font.SetColor(XLColor.FromHtml("#01172f"));
+        titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sheet.Range(3, 3, 3, 4).Merge();
 
-        // Right Column (School Info)
-        var rightText = "المملكة العربية السعودية\nوزارة التعليم\nالإدارة العامة للتعليم بمنطقة الباحة\nمتوسطة الأمير فيصل بالعقيق";
-        var shapedRightText = string.Join("\n", rightText.Split('\n').Select(ArabicTextShaper.Shape));
-        var rightCell = new Cell().Add(new Paragraph(shapedRightText)
-            .SetFontSize(10)
-            .SetTextAlignment(TextAlignment.RIGHT))
-            .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
-        headerTable.AddCell(rightCell);
-
-        // Center Column (Logo Placeholder)
-        var logoPath = Path.Combine(_webHostEnvironment.WebRootPath, "logo-no-bg.png");
-        Cell centerCell;
-        if (File.Exists(logoPath))
-        {
-            var logoData = iText.IO.Image.ImageDataFactory.Create(logoPath);
-            var logo = new iText.Layout.Element.Image(logoData).SetHorizontalAlignment(HorizontalAlignment.CENTER).SetHeight(50);
-            centerCell = new Cell().Add(logo).SetBorder(iText.Layout.Borders.Border.NO_BORDER);
-        }
-        else
-        {
-            centerCell = new Cell().Add(new Paragraph(ArabicTextShaper.Shape("وزارة التعليم"))
-                .SetFontSize(12).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetTextAlignment(TextAlignment.CENTER))
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
-        }
-        headerTable.AddCell(centerCell);
-
-        // Left Column (Exam Info)
+        // Left Section (Exam Details)
         string className = results.FirstOrDefault()?.ClassName ?? "---";
-        var leftText = $"الصف: {className}\nالقسم: بنين\nالعام: 1446-1447هـ\nالفصل الدراسي: الثاني\nالمادة: {exam.Subject}";
-        var shapedLeftText = string.Join("\n", leftText.Split('\n').Select(ArabicTextShaper.Shape));
-        var leftCell = new Cell().Add(new Paragraph(shapedLeftText)
-            .SetFontSize(10)
-            .SetTextAlignment(TextAlignment.RIGHT))
-            .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
-        headerTable.AddCell(leftCell);
+        sheet.Cell(1, 5).SetValue($"الصف: {className}");
+        sheet.Cell(2, 5).SetValue("القسم: بنين");
+        sheet.Cell(3, 5).SetValue("العام: 1446-1447هـ");
+        sheet.Cell(4, 5).SetValue("الفصل الدراسي: الثاني");
+        sheet.Cell(5, 5).SetValue($"المادة: {exam.Subject}");
 
-        document.Add(headerTable);
+        var headerInfoRange = sheet.Range(1, 1, 5, 5);
+        headerInfoRange.Style.Font.SetFontSize(11);
+        headerInfoRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-        // Title
-        var title = new Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة {exam.Subject} للفصل"))
-            .SetTextAlignment(TextAlignment.CENTER)
-            .SetFontSize(16)
-            .SetBold()
-            .SetMarginTop(10);
-        document.Add(title);
+        // --- Table Headers ---
+        var tableStartRow = 7;
+        var headers = new string[] { "م", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
 
-        document.Add(new Paragraph("\n"));
-
-        var table = new Table(UnitValue.CreatePercentArray(new float[] { 10, 30, 15, 15, 30 }))
-            .UseAllAvailableWidth();
-
-        string[] headers = { "م", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
-        foreach (var h in headers)
+        for (int i = 0; i < headers.Length; i++)
         {
-            table.AddHeaderCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(h)))
-                .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
-                .SetTextAlignment(TextAlignment.CENTER));
+            var cell = sheet.Cell(tableStartRow, i + 1);
+            cell.SetValue(headers[i]);
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E2E8F0"); // Light blue-gray
+            cell.Style.Font.SetBold();
+            cell.Style.Font.SetFontSize(12);
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         }
 
-        for (int i = 0; i < results.Count; i++)
+        // --- Student Data ---
+        for (int rowIndex = 0; rowIndex < results.Count; rowIndex++)
         {
-            var r = results[i];
-            table.AddCell(new Cell().Add(new Paragraph((i + 1).ToString()))
-                .SetTextAlignment(TextAlignment.CENTER));
-            table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(r.StudentName)))
-                .SetTextAlignment(TextAlignment.RIGHT));
-            table.AddCell(new Cell().Add(new Paragraph((r.Score ?? 0).ToString()))
-                .SetTextAlignment(TextAlignment.CENTER));
-            table.AddCell(new Cell().Add(new Paragraph((r.TotalQuestions ?? 0).ToString()))
-                .SetTextAlignment(TextAlignment.CENTER));
-            table.AddCell(new Cell().Add(new Paragraph(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm")))
-                .SetTextAlignment(TextAlignment.CENTER));
+            var r = results[rowIndex];
+            int excelRow = tableStartRow + rowIndex + 1;
+
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1);
+            sheet.Cell(excelRow, 2).SetValue(r.StudentName);
+            sheet.Cell(excelRow, 3).SetValue(r.Score ?? 0);
+            sheet.Cell(excelRow, 4).SetValue(r.TotalQuestions ?? 0);
+            sheet.Cell(excelRow, 5).SetValue(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm"));
+
+            var dataRange = sheet.Range(excelRow, 1, excelRow, headers.Length);
+            dataRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            sheet.Cell(excelRow, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right; // Name aligned right
         }
 
-        document.Add(table);
-        document.Close();
+        sheet.Columns().AdjustToContents();
+        sheet.Column(2).Width = 40; // Fixed width for name column
 
-        var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        await using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
         return Result.Success((stream.ToArray(), fileName));
+    }
+
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
+    {
+        try
+        {
+            var exam = await _context.Exams.FirstOrDefaultAsync(e => e.Id == examId);
+            if (exam == null)
+                return Result.Failure<(byte[] FileContent, string FileName)>(new Error("ExamNotFound", "الاختبار غير موجود", 404));
+
+            var results = await _context.StudentExamPapers
+                .Include(p => p.Student)
+                    .ThenInclude(s => s.Class)
+                .Where(p => p.ExamId == examId)
+                .Select(p => new
+                {
+                    StudentName = p.Student.FullName,
+                    ClassName = p.Student.Class.Name,
+                    Score = p.FinalScore,
+                    TotalQuestions = p.TotalQuestions,
+                    GeneratedAt = p.GeneratedAt
+                })
+                .ToListAsync();
+
+            using var stream = new MemoryStream();
+            var writer = new PdfWriter(stream);
+            var pdf = new PdfDocument(writer);
+            var document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
+
+            var fontPath = Path.Combine(_webHostEnvironment.WebRootPath, "fonts", "arialbd.ttf");
+            if (!File.Exists(fontPath))
+                return Result.Failure<(byte[] FileContent, string FileName)>(new Error("FontNotFound", $"Font file not found at: {fontPath}", 500));
+
+            var font = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+
+            document.SetFont(font);
+
+            // Header Table (3 columns)
+            var headerTable = new Table(UnitValue.CreatePercentArray(new float[] { 35, 30, 35 }))
+                .UseAllAvailableWidth()
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+
+            // Right Column (School Info)
+            var rightText = "المملكة العربية السعودية\nوزارة التعليم\nالإدارة العامة للتعليم بمنطقة الباحة\nمتوسطة الأمير فيصل بالعقيق";
+            var shapedRightText = string.Join("\n", rightText.Split('\n').Select(ArabicTextShaper.Shape));
+            var rightCell = new Cell().Add(new Paragraph(shapedRightText)
+                .SetFontSize(10)
+                .SetTextAlignment(TextAlignment.RIGHT))
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+            headerTable.AddCell(rightCell);
+
+            // Center Column (Logo Placeholder)
+            var logoPath = Path.Combine(_webHostEnvironment.WebRootPath, "logo-no-bg.png");
+            Cell centerCell;
+            if (File.Exists(logoPath))
+            {
+                var logoData = iText.IO.Image.ImageDataFactory.Create(logoPath);
+                var logo = new iText.Layout.Element.Image(logoData).SetHorizontalAlignment(HorizontalAlignment.CENTER).SetHeight(50);
+                centerCell = new Cell().Add(logo).SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+            }
+            else
+            {
+                centerCell = new Cell().Add(new Paragraph(ArabicTextShaper.Shape("وزارة التعليم"))
+                    .SetFontSize(12).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetTextAlignment(TextAlignment.CENTER))
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+            }
+            headerTable.AddCell(centerCell);
+
+            // Left Column (Exam Info)
+            string className = results.FirstOrDefault()?.ClassName ?? "---";
+            var leftText = $"الصف: {className}\nالقسم: بنين\nالعام: 1446-1447هـ\nالفصل الدراسي: الثاني\nالمادة: {exam.Subject}";
+            var shapedLeftText = string.Join("\n", leftText.Split('\n').Select(ArabicTextShaper.Shape));
+            var leftCell = new Cell().Add(new Paragraph(shapedLeftText)
+                .SetFontSize(10)
+                .SetTextAlignment(TextAlignment.RIGHT))
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+            headerTable.AddCell(leftCell);
+
+            document.Add(headerTable);
+
+            // Title
+            var title = new Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة {exam.Subject} للفصل"))
+                .SetTextAlignment(TextAlignment.CENTER)
+                .SetFontSize(16)
+                .SetBold()
+                .SetMarginTop(10);
+            document.Add(title);
+
+            document.Add(new Paragraph("\n"));
+
+            var table = new Table(UnitValue.CreatePercentArray(new float[] { 10, 30, 15, 15, 30 }))
+                .UseAllAvailableWidth();
+
+            string[] headers = { "م", "اسم الطالب", "الدرجة النهائية", "عدد الأسئلة", "تاريخ التصحيح" };
+            foreach (var h in headers)
+            {
+                table.AddHeaderCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(h)))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                var r = results[i];
+                table.AddCell(new Cell().Add(new Paragraph((i + 1).ToString()))
+                    .SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(r.StudentName)))
+                    .SetTextAlignment(TextAlignment.RIGHT));
+                table.AddCell(new Cell().Add(new Paragraph((r.Score ?? 0).ToString()))
+                    .SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph((r.TotalQuestions ?? 0).ToString()))
+                    .SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm")))
+                    .SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+
+            var fileName = $"{exam.Title}_الدرجات_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            return Result.Success((stream.ToArray(), fileName));
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PdfGenerationError", $"An error occurred during PDF generation: {ex.Message}", 500));
+        }
     }
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync()
     {
