@@ -38,8 +38,9 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
 
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("Students");
+        sheet.RightToLeft = true;
 
-        var headers = new string[] { "Full Name", "Email", "Mobile Number", "Class", "Status", "Registered On" };
+        var headers = new string[] { "م", "الاسم كامل", "البريد الإلكتروني", "رقم الجوال", "الفصل", "الحالة", "تاريخ التسجيل" };
 
         for (int i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).SetValue(headers[i]);
@@ -55,14 +56,15 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
             var s = students[rowIndex];
             int excelRow = rowIndex + 2;
 
-            sheet.Cell(excelRow, 1).SetValue(s.FullName);
-            sheet.Cell(excelRow, 2).SetValue(s.Email ?? "");
-            sheet.Cell(excelRow, 3).SetValue(s.MobileNumber ?? "");
-            sheet.Cell(excelRow, 4).SetValue(s.ClassName);
-            sheet.Cell(excelRow, 5).SetValue(s.IsDisabled ? "Disabled" : "Active");
-            sheet.Cell(excelRow, 6).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1);
+            sheet.Cell(excelRow, 2).SetValue(s.FullName);
+            sheet.Cell(excelRow, 3).SetValue(s.Email ?? "");
+            sheet.Cell(excelRow, 4).SetValue(s.MobileNumber ?? "");
+            sheet.Cell(excelRow, 5).SetValue(s.ClassName);
+            sheet.Cell(excelRow, 6).SetValue(s.IsDisabled ? "معطل" : "نشط");
+            sheet.Cell(excelRow, 7).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
 
-            var statusCell = sheet.Cell(excelRow, 5);
+            var statusCell = sheet.Cell(excelRow, 6); // Adjusted index for status column
             statusCell.Style.Fill.BackgroundColor = s.IsDisabled ? XLColor.Red : XLColor.Green;
         }
 
@@ -75,39 +77,80 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var fileName = $"Students_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
-        return Result.Success((stream.ToArray(), fileName));
+        return Result.Success((stream.ToArray(), "Students.xlsx"));
     }
 
-    //public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToPdfAsync(IEnumerable<int> classIds)
-    //{
-    //    var students = await _context.Students
-    //        .Include(s => s.Class)
-    //        .Where(s => classIds.Contains(s.ClassId))
-    //        .Select(s => new StudentsExportViewModel
-    //        {
-    //            FullName = s.FullName,
-    //            Email = s.Email,
-    //            MobileNumber = s.MobileNumber,
-    //            ClassName = s.Class!.Name,
-    //            IsDisabled = s.IsDisabled,
-    //            RegisteredOn = s.CreatedAt
-    //        })
-    //        .ToListAsync();
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToPdfAsync(IEnumerable<int> classIds)
+    {
+        try
+        {
+            var students = await _context.Students
+                .Include(s => s.Class)
+                .Where(s => classIds.Contains(s.ClassId))
+                .Select(s => new
+                {
+                    s.FullName,
+                    s.Email,
+                    s.MobileNumber,
+                    ClassName = s.Class!.Name,
+                    s.IsDisabled,
+                    s.CreatedAt
+                })
+                .ToListAsync();
 
-    //    var html = await RazorTemplateEngine.RenderAsync("Templates/StudentsTemplate.cshtml", students);
+            using var stream = new MemoryStream();
+            var writer = new PdfWriter(stream);
+            var pdf = new PdfDocument(writer);
+            var document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
 
-    //    var pdf = Pdf.From(html)
-    //        .WithGlobalSetting("PaperSize", "A4")
-    //        .WithGlobalSetting("Orientation", "Portrait")
-    //        .WithGlobalSetting("DPI", "300")
-    //        .WithObjectSetting("WebSettings.DefaultEncoding", "utf-8")
-    //        .Content();
+            var fontPath = Path.Combine(_webHostEnvironment.WebRootPath, "fonts", "arialbd.ttf");
+            if (!File.Exists(fontPath))
+                return Result.Failure<(byte[] FileContent, string FileName)>(new Error("FontNotFound", "ملف الخط غير موجود", 500));
 
-    //    var fileName = $"Students_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            var font = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+            document.SetFont(font);
 
-    //    return Result.Success((pdf.ToArray(), fileName)); ;
-    //}
+            // Title
+            var title = new Paragraph(ArabicTextShaper.Shape("تقرير الطلاب"))
+                .SetTextAlignment(TextAlignment.CENTER)
+                .SetFontSize(18)
+                .SetBold();
+            document.Add(title);
+            document.Add(new Paragraph("\n"));
+
+            var table = new Table(UnitValue.CreatePercentArray(new float[] { 5, 20, 20, 15, 15, 12, 13 }))
+                .UseAllAvailableWidth();
+
+            string[] headers = { "م", "اسم الطالب", "البريد الإلكتروني", "رقم الجوال", "الفصل", "الحالة", "التاريخ" };
+            foreach (var h in headers)
+            {
+                table.AddHeaderCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(h)))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < students.Count; i++)
+            {
+                var s = students[i];
+                table.AddCell(new Cell().Add(new Paragraph((i + 1).ToString())).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(s.FullName))).SetTextAlignment(TextAlignment.RIGHT));
+                table.AddCell(new Cell().Add(new Paragraph(s.Email ?? "")).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(s.MobileNumber ?? "")).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(s.ClassName))).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(s.IsDisabled ? "معطل" : "نشط"))).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(s.CreatedAt.ToString("yyyy-MM-dd"))).SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+
+            return Result.Success((stream.ToArray(), "Students.pdf"));
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PdfError", ex.Message, 500));
+        }
+    }
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId)
     {
@@ -337,14 +380,15 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
            {
                s.Name,
                s.CreatedAt,
-               numberOfStudents = s.Students.Count
+               NumberOfStudents = s.Students.Count
            })
            .ToListAsync();
 
         using var workbook = new XLWorkbook();
-        var sheet = workbook.AddWorksheet("الفصول");
+        var sheet = workbook.AddWorksheet("Classes");
+        sheet.RightToLeft = true;
 
-        var headers = new string[] { "الاسم", "تم الإنشاء في", "عدد الطلاب"};
+        var headers = new string[] { "م", "اسم الفصل", "تاريخ الإنشاء", "عدد الطلاب" };
 
         for (int i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).SetValue(headers[i]);
@@ -357,12 +401,13 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
 
         for (int rowIndex = 0; rowIndex < classes.Count; rowIndex++)
         {
-            var s = classes[rowIndex];
+            var c = classes[rowIndex];
             int excelRow = rowIndex + 2;
 
-            sheet.Cell(excelRow, 1).SetValue(s.Name);
-            sheet.Cell(excelRow, 2).SetValue(s.CreatedAt.ToString("yyyy-MM-dd"));
-            sheet.Cell(excelRow, 3).SetValue(s.numberOfStudents);
+            sheet.Cell(excelRow, 1).SetValue(rowIndex + 1);
+            sheet.Cell(excelRow, 2).SetValue(c.Name);
+            sheet.Cell(excelRow, 3).SetValue(c.CreatedAt.ToString("yyyy-MM-dd"));
+            sheet.Cell(excelRow, 4).SetValue(c.NumberOfStudents);
         }
 
         sheet.Columns().AdjustToContents();
@@ -374,32 +419,71 @@ public class ReportService(ApplicationDbContext context, IWebHostEnvironment web
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var fileName = $"الفصول_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
-        return Result.Success((stream.ToArray(), fileName));
+        return Result.Success((stream.ToArray(), "Classes.xlsx"));
     }
 
-    //public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync()
-    //{
-    //    var classes = await _context.Classes
-    //       .Include(s => s.Students)
-    //       .Select(s => new ClassesExportViewModel
-    //       {
-    //           Name = s.Name,
-    //           CreatedAt = s.CreatedAt,
-    //           NumberOfStudents = s.Students.Count
-    //       })
-    //       .ToListAsync();
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync()
+    {
+        try
+        {
+            var classes = await _context.Classes
+               .Include(s => s.Students)
+               .Select(s => new
+               {
+                   s.Name,
+                   s.CreatedAt,
+                   NumberOfStudents = s.Students.Count
+               })
+               .ToListAsync();
 
-    //    var html = await RazorTemplateEngine.RenderAsync("Templates/ClassesTemplate.cshtml", classes);
+            using var stream = new MemoryStream();
+            var writer = new PdfWriter(stream);
+            var pdf = new PdfDocument(writer);
+            var document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
 
-    //    var pdf = Pdf.From(html)
-    //        .WithGlobalSetting("Orientation", "Portrait")
-    //        .WithGlobalSetting("DPI", "300")
-    //        .WithObjectSetting("WebSettings.DefaultEncoding", "utf-8")
-    //        .Content();
+            var fontPath = Path.Combine(_webHostEnvironment.WebRootPath, "fonts", "arialbd.ttf");
+            if (!File.Exists(fontPath))
+                return Result.Failure<(byte[] FileContent, string FileName)>(new Error("FontNotFound", "ملف الخط غير موجود", 500));
 
-    //    var fileName = $"الفصول_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            var font = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+            document.SetFont(font);
 
-    //    return Result.Success((pdf.ToArray(), fileName)); ;
-    //}
+            // Title
+            var title = new Paragraph(ArabicTextShaper.Shape("تقرير الفصول"))
+                .SetTextAlignment(TextAlignment.CENTER)
+                .SetFontSize(18)
+                .SetBold();
+            document.Add(title);
+            document.Add(new Paragraph("\n"));
+
+            var table = new Table(UnitValue.CreatePercentArray(new float[] { 10, 40, 30, 20 }))
+                .UseAllAvailableWidth();
+
+            string[] headers = { "م", "اسم الفصل", "تاريخ الإنشاء", "عدد الطلاب" };
+            foreach (var h in headers)
+            {
+                table.AddHeaderCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(h)))
+                    .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.LIGHT_GRAY)
+                    .SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            for (int i = 0; i < classes.Count; i++)
+            {
+                var c = classes[i];
+                table.AddCell(new Cell().Add(new Paragraph((i + 1).ToString())).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(ArabicTextShaper.Shape(c.Name))).SetTextAlignment(TextAlignment.RIGHT));
+                table.AddCell(new Cell().Add(new Paragraph(c.CreatedAt.ToString("yyyy-MM-dd"))).SetTextAlignment(TextAlignment.CENTER));
+                table.AddCell(new Cell().Add(new Paragraph(c.NumberOfStudents.ToString())).SetTextAlignment(TextAlignment.CENTER));
+            }
+
+            document.Add(table);
+            document.Close();
+
+            return Result.Success((stream.ToArray(), "Classes.pdf"));
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("PdfError", ex.Message, 500));
+        }
+    }
 }
