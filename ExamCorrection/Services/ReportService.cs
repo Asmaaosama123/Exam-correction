@@ -225,13 +225,12 @@ public class ReportService(ApplicationDbContext context) : IReportService
             if (File.Exists(logoPath))
             {
                 var logoData = iText.IO.Image.ImageDataFactory.Create(logoPath);
-                var logoImg = new iText.Layout.Element.Image(logoData).SetWidth(60).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                var logoImg = new iText.Layout.Element.Image(logoData).SetWidth(85).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
                 midCell.Add(logoImg);
             }
             var calendar = new System.Globalization.UmAlQuraCalendar();
             var hijriYear = calendar.GetYear(DateTime.Now);
 
-            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
             midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة: {exam.Subject.Trim()}")).SetFont(font).SetFontSize(12).SetBold());
             midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"للعام الدراسي {hijriYear} هـ")).SetFont(font).SetFontSize(10));
             headerTable.AddCell(midCell);
