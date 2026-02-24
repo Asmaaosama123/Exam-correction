@@ -171,10 +171,13 @@ public class ReportService(ApplicationDbContext context) : IReportService
         sheet.CellsUsed().Style.Border.OutsideBorderColor = XLColor.Black;
         sheet.CellsUsed().Style.Font.SetFontSize(12);
 
+        var firstResult = results.FirstOrDefault();
+        var className = firstResult?.Student?.Class?.Name ?? "General";
+
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var fileName = $"{exam.Title}.xlsx";
+        var fileName = $"{exam.Title}_{className}_{DateTime.Now:yyyyMMdd}.xlsx";
         foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((stream.ToArray(), fileName));
     }
@@ -203,7 +206,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
             var firstResult = results.FirstOrDefault();
-            var className = firstResult?.Student?.Class?.Name ?? "..........";
+            var className = firstResult?.Student?.Class?.Name ?? "General";
 
             // --- Header Table ---
             var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER);
@@ -272,7 +275,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
             document.Close();
         }
 
-        var fileName = $"{exam.Title}.pdf";
+        var fileName = $"{exam.Title}_{className}_{DateTime.Now:yyyyMMdd}.pdf";
         foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((ms.ToArray(), fileName));
     }
