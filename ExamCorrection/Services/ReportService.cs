@@ -141,7 +141,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("نتائج الاختبار");
 
-        var headers = new string[] { "ت", "اسم الطالب", "الفصل", "الدرجة", "إجمالي الأسئلة", "تاريخ التصحيح" };
+        var headers = new string[] { "ت", "اسم الطالب", "الفصل", "الدرجة", "المجموع الكلي", "تاريخ التصحيح" };
 
         for (int i = 0; i < headers.Length; i++)
             sheet.Cell(1, i + 1).SetValue(headers[i]);
@@ -174,7 +174,8 @@ public class ReportService(ApplicationDbContext context) : IReportService
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
 
-        var fileName = $"{exam.Title}_نتائج_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        var fileName = $"{exam.Title}.xlsx";
+        foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((stream.ToArray(), fileName));
     }
 
@@ -201,18 +202,47 @@ public class ReportService(ApplicationDbContext context) : IReportService
             var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
-            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"نتائج اختبار: {exam.Title}"))
-                .SetFont(font)
-                .SetFontSize(20)
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            // --- Header Table ---
+            var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER);
 
-            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject}"))
-                .SetFont(font)
-                .SetFontSize(14)
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+            // Right Cell (Saudi Arabia labels)
+            var rightCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("المملكة العربية السعودية")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الإدارة العامة للتعليم")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("مدرسة: .....................")).SetFont(font).SetFontSize(10));
+            headerTable.AddCell(rightCell);
+
+            // Middle Cell (Logo and Title)
+            var midCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
+            
+            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "logo-no-bg.png");
+            if (File.Exists(logoPath))
+            {
+                var logoData = iText.IO.Image.ImageDataFactory.Create(logoPath);
+                var logoImg = new iText.Layout.Element.Image(logoData).SetWidth(60).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                midCell.Add(logoImg);
+            }
+            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
+            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة {exam.Subject} للفصل ........")).SetFont(font).SetFontSize(12).SetBold());
+            headerTable.AddCell(midCell);
+
+            // Left Cell (Exam Details)
+            var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الصف: .....................")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("القسم: .....................")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الفصل: .....................")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject}")).SetFont(font).SetFontSize(10));
+            headerTable.AddCell(leftCell);
+
+            document.Add(headerTable);
+            document.Add(new iText.Layout.Element.Paragraph("\n"));
 
             var table = new iText.Layout.Element.Table(5).UseAllAvailableWidth();
-            string[] headers = { "ت", "اسم الطالب", "الفصل", "الدرجة", "إجمالي الأسئلة" };
+            string[] headers = { "ت", "اسم الطالب", "الفصل", "الدرجة", "المجموع الكلي" };
 
             foreach (var header in headers.Reverse())
             {
@@ -236,7 +266,8 @@ public class ReportService(ApplicationDbContext context) : IReportService
             document.Close();
         }
 
-        var fileName = $"ExamResults_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        var fileName = $"{exam.Title}.pdf";
+        foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((ms.ToArray(), fileName));
     }
 
