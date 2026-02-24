@@ -144,9 +144,11 @@ public class ExamAiService(
 
                         if (!string.IsNullOrEmpty(qId))
                         {
-                            questionPointsMap[qId] = pts;
+                            // تنظيف إضافي لـ ID لضمان المطابقة (حذف الأصفار على اليسار مثلاً)
+                            string normalizedMapId = qId.TrimStart('0', 'q', '-');
+                            questionPointsMap[normalizedMapId] = pts;
                             totalExamPoints += pts;
-                            Console.WriteLine($"[ProcessExam] MAP_BUILD: Question ID='{qId}' -> Points={pts}");
+                            Console.WriteLine($"[ProcessExam] MAP_BUILD: OriginalID='{qId}', NormalizedID='{normalizedMapId}', Points={pts}");
                         }
                     }
                 }
@@ -155,7 +157,7 @@ public class ExamAiService(
             {
                 Console.WriteLine($"[ProcessExam] ERROR parsing JSON Points: {ex.Message}");
             }
-            Console.WriteLine($"[ProcessExam] Total Exam Points Calculated: {totalExamPoints}");
+            Console.WriteLine($"[ProcessExam] >>> Total Exam Points Calculated: {totalExamPoints}");
             // -----------------------------------------------------------
 
             // 5️⃣ تعديل أو إضافة StudentExamPaper + تحضير النتيجة الراجعة
@@ -212,24 +214,22 @@ public class ExamAiService(
                     float pts = 0;
                     string detailId = detail.Id?.Trim() ?? "";
 
-                    // محاولة المطابقة المباشرة
-                    if (!questionPointsMap.TryGetValue(detailId, out pts))
+                    // محاولة المطابقة المباشرة والبديلة بمرونة عالية
+                    string normDetailId = detailId.TrimStart('0', 'q', '-');
+                    
+                    if (questionPointsMap.TryGetValue(detailId, out pts))
                     {
-                        // محاولة ثانية: إذا كان هناك ID يبدأ بـ "q-" أو مجرد أرقام
-                        string normalizedId = detailId.TrimStart('q', '-');
-                        if (!questionPointsMap.TryGetValue(normalizedId, out pts))
-                        {
-                            pts = 1.0f; // القيمة الافتراضية
-                            Console.WriteLine($"[ProcessExam] NO_MATCH for ID='{detailId}'. Using default 1.0");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"[ProcessExam] MATCH_NORMALIZED for ID='{detailId}' (as '{normalizedId}') -> Points={pts}");
-                        }
+                        Console.WriteLine($"[ProcessExam] DIRECT_MATCH: ID='{detailId}' -> Points={pts}");
+                    }
+                    else if (questionPointsMap.TryGetValue(normDetailId, out pts))
+                    {
+                        Console.WriteLine($"[ProcessExam] NORM_MATCH: ID='{detailId}' -> NormID='{normDetailId}' -> Points={pts}");
                     }
                     else
                     {
-                        Console.WriteLine($"[ProcessExam] DIRECT_MATCH for ID='{detailId}' -> Points={pts}");
+                        pts = 1.0f; // القيمة الافتراضية
+                        Console.WriteLine($"[ProcessExam] !! NO_MATCH !!: ID='{detailId}' (Norm='{normDetailId}'). Using default 1.0");
+                        Console.WriteLine($"[ProcessExam] Available IDs in map: {string.Join(", ", questionPointsMap.Keys)}");
                     }
 
                     if (detail.IsCorrect) recalculatedScore += pts;
