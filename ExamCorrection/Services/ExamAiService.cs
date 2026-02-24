@@ -72,36 +72,17 @@ public class ExamAiService(
             using var mcqContent = new MultipartFormDataContent();
             mcqContent.Add(new StreamContent(file.OpenReadStream()), "files", file.FileName);
             
-            // --- ✅ [جديد] تنظيف الـ JSON قبل إرساله للـ AI لضمان عدم حدوث أخطاء ---
+            // --- ✅ تنظيف الـ JSON: حذف حقل "points" فقط قبل إرساله للـ AI ---
             string cleanedJson = teacherExam.QuestionsJson;
             try {
-                using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("questions", out var questionsArr)) {
-                    var cleanedQuestions = new List<object>();
-                    foreach (var q in questionsArr.EnumerateArray()) {
-                        var qDict = new Dictionary<string, object>();
-                        foreach (var prop in q.EnumerateObject()) {
-                            // إبقاء كل شيء ما عدا "points" (بأي حالة أحرف)
-                            if (!prop.Name.Equals("points", StringComparison.OrdinalIgnoreCase)) {
-                                qDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Number 
-                                    ? (object)prop.Value.GetDouble() 
-                                    : prop.Value.GetRawText().Trim().Replace("\"", "");
-                            }
-                        }
-                        cleanedQuestions.Add(qDict);
+                var jsonNode = System.Text.Json.Nodes.JsonNode.Parse(teacherExam.QuestionsJson);
+                if (jsonNode is System.Text.Json.Nodes.JsonObject rootObj
+                    && rootObj["questions"] is System.Text.Json.Nodes.JsonArray questionsNode) {
+                    foreach (var q in questionsNode) {
+                        if (q is System.Text.Json.Nodes.JsonObject qObj)
+                            qObj.Remove("points"); // حذف "points" فقط — باقي القيم تفضل كما هي
                     }
-                    var configDict = new Dictionary<string, object>();
-                    foreach (var prop in root.EnumerateObject()) {
-                        if (prop.Name.Equals("questions", StringComparison.OrdinalIgnoreCase)) {
-                            configDict[prop.Name] = cleanedQuestions;
-                        } else {
-                            configDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Number 
-                                ? (object)prop.Value.GetDouble() 
-                                : prop.Value.GetRawText().Trim().Replace("\"", "");
-                        }
-                    }
-                    cleanedJson = JsonSerializer.Serialize(configDict);
+                    cleanedJson = jsonNode.ToJsonString();
                 }
             } catch (Exception ex) {
                 Console.WriteLine($"[ProcessExam] Warning: Failed to clean JSON: {ex.Message}");
