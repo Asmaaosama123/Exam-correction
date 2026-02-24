@@ -195,6 +195,9 @@ public class ReportService(ApplicationDbContext context) : IReportService
             .OrderBy(x => x.Student.FullName)
             .ToListAsync();
 
+        var firstResult = results.FirstOrDefault();
+        var className = firstResult?.Student?.Class?.Name ?? "General";
+
         using var ms = new MemoryStream();
         using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
@@ -204,9 +207,6 @@ public class ReportService(ApplicationDbContext context) : IReportService
 
             var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
-
-            var firstResult = results.FirstOrDefault();
-            var className = firstResult?.Student?.Class?.Name ?? "General";
 
             // --- Header Table ---
             var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER);
