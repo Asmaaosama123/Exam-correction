@@ -202,41 +202,48 @@ public class ReportService(ApplicationDbContext context) : IReportService
             var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
+            var firstResult = results.FirstOrDefault();
+            var className = firstResult?.Student?.Class?.Name ?? "..........";
+
             // --- Header Table ---
             var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER);
 
-            // Right Cell (Saudi Arabia labels)
-            var rightCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
-            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("المملكة العربية السعودية")).SetFont(font).SetFontSize(10));
-            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
-            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الإدارة العامة للتعليم")).SetFont(font).SetFontSize(10));
-            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("مدرسة: .....................")).SetFont(font).SetFontSize(10));
-            headerTable.AddCell(rightCell);
+            // Left Cell (Exam Details) - NOW FIRST (LEFT SIDE)
+            var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الصف: {className}")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("القسم: عام")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الفصل الدراسي: الأول")).SetFont(font).SetFontSize(10));
+            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject.Trim()}")).SetFont(font).SetFontSize(10));
+            headerTable.AddCell(leftCell);
 
             // Middle Cell (Logo and Title)
             var midCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
             
-            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "logo-no-bg.png");
+            var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "moe_logo.jpg");
             if (File.Exists(logoPath))
             {
                 var logoData = iText.IO.Image.ImageDataFactory.Create(logoPath);
                 var logoImg = new iText.Layout.Element.Image(logoData).SetWidth(60).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
                 midCell.Add(logoImg);
             }
+            var calendar = new System.Globalization.UmAlQuraCalendar();
+            var hijriYear = calendar.GetYear(DateTime.Now);
+
             midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
-            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة {exam.Subject} للفصل ........")).SetFont(font).SetFontSize(12).SetBold());
+            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"كشف رصد درجات مادة: {exam.Subject.Trim()}")).SetFont(font).SetFontSize(12).SetBold());
+            midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"للعام الدراسي {hijriYear} هـ")).SetFont(font).SetFontSize(10));
             headerTable.AddCell(midCell);
 
-            // Left Cell (Exam Details)
-            var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الصف: .....................")).SetFont(font).SetFontSize(10));
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("القسم: .....................")).SetFont(font).SetFontSize(10));
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الفصل: .....................")).SetFont(font).SetFontSize(10));
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject}")).SetFont(font).SetFontSize(10));
-            headerTable.AddCell(leftCell);
+            // Right Cell (Saudi Arabia labels) - NOW THIRD (RIGHT SIDE)
+            var rightCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("المملكة العربية السعودية")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الإدارة العامة للتعليم")).SetFont(font).SetFontSize(10));
+            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسطة الامير فيصل بالعقيق")).SetFont(font).SetFontSize(10));
+            headerTable.AddCell(rightCell);
 
             document.Add(headerTable);
             document.Add(new iText.Layout.Element.Paragraph("\n"));

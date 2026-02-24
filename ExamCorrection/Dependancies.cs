@@ -92,7 +92,8 @@ public static class Dependancies
                     .WithOrigins(configuration.GetSection("AllowedOrigins").Get<string[]>()!)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
-                    .AllowCredentials(); // مهم جدًا مع cookies/session
+                    .AllowCredentials()
+                    .WithExposedHeaders("Content-Disposition"); // مهم للسماح للمتصفح بقراءة اسم الملف المرتجع من السيرفر
             });
         });
 
