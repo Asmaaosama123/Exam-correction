@@ -178,6 +178,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
         workbook.SaveAs(stream);
 
         var fileName = $"{exam.Title}_{className}_{DateTime.Now:yyyyMMdd}.xlsx";
+        fileName = fileName.Replace(' ', '_');
         foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((stream.ToArray(), fileName));
     }
@@ -276,6 +277,7 @@ public class ReportService(ApplicationDbContext context) : IReportService
         }
 
         var fileName = $"{exam.Title}_{className}_{DateTime.Now:yyyyMMdd}.pdf";
+        fileName = fileName.Replace(' ', '_');
         foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
         return Result.Success((ms.ToArray(), fileName));
     }
