@@ -109,40 +109,53 @@ public class ExamAiService(
             Console.WriteLine($"[ProcessExam] MCQ success. Processing {mcqData.Results.Count} results.");
 
             // --- ✅ [جديد] تحضير خريطة الدرجات من الـ JSON الأصلي ---
-           // --- ✅ التعديل المطلوب لضمان قراءة الكسور ---
-var questionPointsMap = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-float totalExamPoints = 0;
+            var questionPointsMap = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            float totalExamPoints = 0;
 
-try {
-    using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
-    if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
-        foreach (var q in questionsArr.EnumerateArray()) {
-            // 1. استخراج الـ ID بمرونة
-            string qId = "";
-            if (q.TryGetProperty("id", out var idProp))
-                qId = idProp.ValueKind == JsonValueKind.String ? idProp.GetString() : idProp.GetRawText().Trim('\"');
+            try
+            {
+                using var doc = JsonDocument.Parse(teacherExam.QuestionsJson);
+                if (doc.RootElement.TryGetProperty("questions", out var questionsArr))
+                {
+                    foreach (var q in questionsArr.EnumerateArray())
+                    {
+                        // 1. استخراج الـ ID بمرونة (تنظيف الزيادات)
+                        string qId = "";
+                        if (q.TryGetProperty("id", out var idProp))
+                        {
+                            qId = idProp.ValueKind == JsonValueKind.String 
+                                ? idProp.GetString()?.Trim() 
+                                : idProp.GetRawText().Trim('\"', ' ', '\n', '\r');
+                        }
 
-            // 2. استخراج الـ Points مع دعم الكسور (Decimal/Float)
-            float pts = 0;
-            if (q.TryGetProperty("points", out var ptsProp)) {
-                if (ptsProp.ValueKind == JsonValueKind.Number) {
-                    pts = (float)ptsProp.GetDouble(); // GetDouble تدعم الكسور
-                } else if (ptsProp.ValueKind == JsonValueKind.String) {
-                    // محاولة تحويل النص إلى رقم عشري مع دعم الثقافة الأجنبية (التي تستخدم النقطة .)
-                    float.TryParse(ptsProp.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out pts);
+                        // 2. استخراج الـ Points مع دعم الكسور
+                        float pts = 0;
+                        if (q.TryGetProperty("points", out var ptsProp))
+                        {
+                            if (ptsProp.ValueKind == JsonValueKind.Number)
+                            {
+                                pts = (float)ptsProp.GetDouble();
+                            }
+                            else if (ptsProp.ValueKind == JsonValueKind.String)
+                            {
+                                float.TryParse(ptsProp.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out pts);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(qId))
+                        {
+                            questionPointsMap[qId] = pts;
+                            totalExamPoints += pts;
+                            Console.WriteLine($"[ProcessExam] MAP_BUILD: Question ID='{qId}' -> Points={pts}");
+                        }
+                    }
                 }
             }
-
-            if (!string.IsNullOrEmpty(qId)) {
-                questionPointsMap[qId] = pts;
-                totalExamPoints += pts;
-                Console.WriteLine($"[MATCH] Question ID: {qId} -> Points: {pts}");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ProcessExam] ERROR parsing JSON Points: {ex.Message}");
             }
-        }
-    }
-} catch (Exception ex) {
-    Console.WriteLine($"[ERROR] Failed to parse JSON Points: {ex.Message}");
-}
+            Console.WriteLine($"[ProcessExam] Total Exam Points Calculated: {totalExamPoints}");
             // -----------------------------------------------------------
 
             // 5️⃣ تعديل أو إضافة StudentExamPaper + تحضير النتيجة الراجعة
@@ -194,20 +207,35 @@ try {
                 float recalculatedScore = 0;
                 var enrichedDetails = new List<QuestionResultDto>();
 
-                foreach (var detail in res.Details.Details) {
+                foreach (var detail in res.Details.Details)
+                {
                     float pts = 0;
                     string detailId = detail.Id?.Trim() ?? "";
-                    if (questionPointsMap.TryGetValue(detailId, out pts)) {
-                        if (detail.IsCorrect) recalculatedScore += pts;
-                        Console.WriteLine($"[ProcessExam] Found Match: ID='{detailId}', Pts={pts}, Correct={detail.IsCorrect}");
-                    } else {
-                        pts = 1.0f; 
-                        if (detail.IsCorrect) recalculatedScore += pts;
-                        Console.WriteLine($"[ProcessExam] NO Match Found: ID='{detailId}', using default 1.0. Correct={detail.IsCorrect}");
+
+                    // محاولة المطابقة المباشرة
+                    if (!questionPointsMap.TryGetValue(detailId, out pts))
+                    {
+                        // محاولة ثانية: إذا كان هناك ID يبدأ بـ "q-" أو مجرد أرقام
+                        string normalizedId = detailId.TrimStart('q', '-');
+                        if (!questionPointsMap.TryGetValue(normalizedId, out pts))
+                        {
+                            pts = 1.0f; // القيمة الافتراضية
+                            Console.WriteLine($"[ProcessExam] NO_MATCH for ID='{detailId}'. Using default 1.0");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[ProcessExam] MATCH_NORMALIZED for ID='{detailId}' (as '{normalizedId}') -> Points={pts}");
+                        }
                     }
+                    else
+                    {
+                        Console.WriteLine($"[ProcessExam] DIRECT_MATCH for ID='{detailId}' -> Points={pts}");
+                    }
+
+                    if (detail.IsCorrect) recalculatedScore += pts;
                     enrichedDetails.Add(detail with { Points = pts });
                 }
-                Console.WriteLine($"[ProcessExam] Student Result: Recalculated Score={recalculatedScore} / {totalExamPoints}");
+                Console.WriteLine($"[ProcessExam] Student {studentId}: Final Score={recalculatedScore} / {totalExamPoints}");
                 // -----------------------------------------------------------
 
                 var studentExam = await _context.StudentExamPapers
