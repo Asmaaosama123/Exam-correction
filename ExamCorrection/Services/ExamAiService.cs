@@ -157,6 +157,7 @@ public class ExamAiService(
             {
                 Console.WriteLine($"[ProcessExam] ERROR parsing JSON Points: {ex.Message}");
             }
+            Console.WriteLine($"[ProcessExam] >>> DEBUG_VERSION_KEY: 2026-02-24-REV2 <<<");
             Console.WriteLine($"[ProcessExam] >>> Total Exam Points Calculated: {totalExamPoints}");
             // -----------------------------------------------------------
 
