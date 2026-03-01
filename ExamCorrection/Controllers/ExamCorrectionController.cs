@@ -15,8 +15,17 @@ public class ExamCorrectionController(IExamService examService) : ControllerBase
     }
 
     [HttpGet("training-dataset")]
-    public IActionResult GetTrainingDatasetFiles([FromServices] IWebHostEnvironment webHostEnvironment)
+    [AllowAnonymous] // يسمح بالدخول بدون Token لكننا سنحميها بكلمة سر מخصص
+    public IActionResult GetTrainingDatasetFiles([FromServices] IWebHostEnvironment webHostEnvironment, [FromQuery] string apiKey)
     {
+        // حماية بـ API Key بسيط خاص بفريق الـ AI
+        const string SecretApiKey = "AI_DATASET_SECURE_KEY_2026";
+        
+        if (string.IsNullOrEmpty(apiKey) || apiKey != SecretApiKey)
+        {
+            return Unauthorized(new { message = "You are not authorized to access this dataset. Invalid API Key." });
+        }
+
         var datasetFolder = Path.Combine(webHostEnvironment.WebRootPath, "AI-Dataset");
         
         if (!Directory.Exists(datasetFolder))
