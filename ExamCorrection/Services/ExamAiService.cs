@@ -21,6 +21,29 @@ public class ExamAiService(
         {
             if (file == null) return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);
 
+            // 0️⃣ Save a raw copy for AI Training Dataset (No Database logic here)
+            try
+            {
+                var env = file.GetType().Assembly.GetType("Microsoft.AspNetCore.Hosting.IWebHostEnvironment"); // We can use IWebHostEnvironment if injected, but since it's not we use a relative path trick or Environment.CurrentDirectory
+                var datasetFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "AI-Dataset");
+                Directory.CreateDirectory(datasetFolder);
+
+                var extension = Path.GetExtension(file.FileName);
+                if (string.IsNullOrEmpty(extension)) extension = ".jpg";
+
+                var newFileName = $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{extension}";
+                var filePath = Path.Combine(datasetFolder, newFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    file.CopyTo(fileStream); // Synchronous copy since we're in an async method but not using await to keep it simple, or we can use CopyToAsync if we don't dispose the stream early.
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AI Dataset] Failed to save raw file: {ex.Message}");
+            }
+
             // 1️⃣ Scan barcode to get ExamId
             using var scanContent = new MultipartFormDataContent();
             scanContent.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);

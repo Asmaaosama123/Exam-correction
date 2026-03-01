@@ -28,7 +28,20 @@ app.UseSwaggerUI(c =>
 
 app.UseCors("myPolicy");
 
-app.UseStaticFiles();
+app.UseStaticFiles(); // Default wwwroot
+
+// Safely serve the AI training dataset folder
+var datasetPath = Path.Combine(builder.Environment.WebRootPath, "AI-Dataset");
+if (!Directory.Exists(datasetPath))
+{
+    Directory.CreateDirectory(datasetPath);
+}
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(datasetPath),
+    RequestPath = "/AI-Dataset"
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

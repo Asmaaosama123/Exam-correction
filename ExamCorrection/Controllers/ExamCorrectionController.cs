@@ -13,5 +13,22 @@ public class ExamCorrectionController(IExamService examService) : ControllerBase
         var result = await _examService.UploadAndSaveExamAnswersAsync(file, cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
+
+    [HttpGet("training-dataset")]
+    public IActionResult GetTrainingDatasetFiles([FromServices] IWebHostEnvironment webHostEnvironment)
+    {
+        var datasetFolder = Path.Combine(webHostEnvironment.WebRootPath, "AI-Dataset");
+        
+        if (!Directory.Exists(datasetFolder))
+        {
+            return Ok(new List<string>());
+        }
+
+        var files = Directory.GetFiles(datasetFolder)
+                             .Select(f => $"/AI-Dataset/{Path.GetFileName(f)}")
+                             .ToList();
+
+        return Ok(files);
+    }
    
 }

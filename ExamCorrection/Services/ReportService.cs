@@ -215,9 +215,6 @@ public class ReportService(ApplicationDbContext context) : IReportService
             // Left Cell (Exam Details) - NOW FIRST (LEFT SIDE)
             var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الصف: {className}")).SetFont(font).SetFontSize(10));
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("القسم: عام")).SetFont(font).SetFontSize(10));
-            leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الفصل الدراسي: الأول")).SetFont(font).SetFontSize(10));
             leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"المادة: {exam.Subject.Trim()}")).SetFont(font).SetFontSize(10));
             headerTable.AddCell(leftCell);
 
@@ -245,7 +242,6 @@ public class ReportService(ApplicationDbContext context) : IReportService
             rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("المملكة العربية السعودية")).SetFont(font).SetFontSize(10));
             rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("وزارة التعليم")).SetFont(font).SetFontSize(10));
             rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الإدارة العامة للتعليم")).SetFont(font).SetFontSize(10));
-            rightCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسطة الامير فيصل بالعقيق")).SetFont(font).SetFontSize(10));
             headerTable.AddCell(rightCell);
 
             document.Add(headerTable);
