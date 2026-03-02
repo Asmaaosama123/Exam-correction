@@ -14,9 +14,9 @@ public class ExamCorrectionController(IExamService examService) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
 
-    [HttpGet("training-dataset")]
+    [HttpGet("training-dataset/download")]
     [AllowAnonymous] // يسمح بالدخول بدون Token لكننا سنحميها بكلمة سر מخصص
-    public IActionResult GetTrainingDatasetFiles([FromServices] IWebHostEnvironment webHostEnvironment, [FromQuery] string apiKey)
+    public IActionResult DownloadTrainingDatasetFilesZip([FromServices] IWebHostEnvironment webHostEnvironment, [FromQuery] string apiKey)
     {
         // حماية بـ API Key بسيط خاص بفريق الـ AI
         const string SecretApiKey = "AI_DATASET_SECURE_KEY_2026";
@@ -30,14 +30,31 @@ public class ExamCorrectionController(IExamService examService) : ControllerBase
         
         if (!Directory.Exists(datasetFolder))
         {
-            return Ok(new List<string>());
+            return NotFound(new { message = "Dataset folder not found." });
         }
 
-        var files = Directory.GetFiles(datasetFolder)
-                             .Select(f => $"/AI-Dataset/{Path.GetFileName(f)}")
-                             .ToList();
+        var memoryStream = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(memoryStream, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            var files = Directory.GetFiles(datasetFolder);
+            foreach (var file in files)
+            {
+                var extension = Path.GetExtension(file).ToLower();
+                if (extension == ".pdf" || extension == ".jpg" || extension == ".png" || extension == ".jpeg")
+                {
+                    // Adding file to zip archive manually to avoid Missing Method Exceptions if no FileSystem assembly is present.
+                    var zipEntry = archive.CreateEntry(Path.GetFileName(file));
+                    using (var entryStream = zipEntry.Open())
+                    using (var fileStream = System.IO.File.OpenRead(file))
+                    {
+                        fileStream.CopyTo(entryStream);
+                    }
+                }
+            }
+        }
 
-        return Ok(files);
+        memoryStream.Position = 0; // Reset stream position to the beginning
+        return File(memoryStream, "application/zip", $"AI_Dataset_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
     }
    
 }
