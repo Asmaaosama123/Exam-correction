@@ -377,4 +377,100 @@ public class ReportService(ApplicationDbContext context) : IReportService
         var fileName = $"Classes_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
         return Result.Success((ms.ToArray(), fileName));
     }
+
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId)
+    {
+        var exam = await _context.Exams.FindAsync(examId);
+        if (exam == null)
+            return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
+
+        var results = await _context.StudentExamPapers
+            .Include(x => x.Student)
+            .ThenInclude(x => x.Class)
+            .Where(x => x.ExamId == examId && !string.IsNullOrEmpty(x.AnnotatedImageUrl))
+            .OrderBy(x => x.Student.FullName)
+            .ToListAsync();
+
+        if (results.Count == 0)
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("NoImages", "لا توجد أوراق مصححة لهذا الاختبار.", StatusCodes.Status404NotFound));
+
+        using var ms = new MemoryStream();
+        using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
+        {
+            var document = new iText.Layout.Document(pdf, iText.Kernel.Geom.PageSize.A4);
+            document.SetMargins(20, 20, 20, 20);
+
+            var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
+            var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
+
+            foreach (var result in results)
+            {
+                // Attempt to load the image
+                string imageUrl = result.AnnotatedImageUrl!;
+                string localImagePath = "";
+
+                if (imageUrl.StartsWith("http"))
+                {
+                    // For now, if it's a full remote URL, we might need an HTTP client. 
+                    // Let's assume the basic case where it's a relative path or we can fetch it.
+                    // To keep it simple and robust, we assume the AnnotatedImageUrl is a relative path 
+                    // or constructed from an upload folder if it's stored locally.
+                    // If it's a remote URL, we'd need to download it first.
+                    try
+                    {
+                        using var httpClient = new HttpClient();
+                        var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
+                        var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
+                        var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
+                        document.Add(image);
+                        
+                        // Add student name as footer or header
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error fetching image {imageUrl}: {ex.Message}");
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"تعذر تحميل ورقة الطالب: {result.Student.FullName}"))
+                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                    }
+                }
+                else
+                {
+                    // Local path handling
+                    localImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
+                    if (File.Exists(localImagePath))
+                    {
+                        var imageData = iText.IO.Image.ImageDataFactory.Create(localImagePath);
+                        var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
+                        document.Add(image);
+                        
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                    }
+                    else
+                    {
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"لم يتم العثور على صورة ورقة الطالب: {result.Student.FullName}"))
+                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                    }
+                }
+                
+                // Add a page break between students, unless it's the last one
+                if (result != results.Last())
+                {
+                    document.Add(new iText.Layout.Element.AreaBreak(iText.Layout.Properties.AreaBreakType.NEXT_PAGE));
+                }
+            }
+
+            document.Close();
+        }
+
+        var className = results.FirstOrDefault()?.Student?.Class?.Name ?? "General";
+        var fileName = $"{exam.Title}_{className}_الاوراق_{DateTime.Now:yyyyMMdd}.pdf";
+        fileName = fileName.Replace(' ', '_');
+        foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
+        
+        return Result.Success((ms.ToArray(), fileName));
+    }
 }
