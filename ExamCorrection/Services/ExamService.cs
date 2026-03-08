@@ -192,7 +192,7 @@ public class ExamService : IExamService
                      return Result.Failure<FileExamResponse>(studentPdfResult.Error);
                 }
 
-                using var studentReader = new PdfReader(new MemoryStream(studentPdfResult.Value));
+                using var studentReader = new PdfReader(new MemoryStream(studentPdfResult.Value!));
                 using var studentPdfDoc = new PdfDocument(studentReader);
                 studentPdfDoc.CopyPagesTo(1, studentPdfDoc.GetNumberOfPages(), destPdf);
             }

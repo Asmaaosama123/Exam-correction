@@ -88,7 +88,7 @@ public class ExamAiService(
             using (var doc = JsonDocument.Parse(teacherExam.QuestionsJson)) {
                 if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
                     foreach (var q in questionsArr.EnumerateArray()) {
-                        string qId = q.GetProperty("id").ValueKind == JsonValueKind.String ? q.GetProperty("id").GetString() : q.GetProperty("id").GetRawText().Trim('\"');
+                        string qId = (q.GetProperty("id").ValueKind == JsonValueKind.String ? q.GetProperty("id").GetString() : q.GetProperty("id").GetRawText().Trim('\"')) ?? "";
                         float pts = 0;
                         if (q.TryGetProperty("points", out var ptsProp)) {
                             pts = ptsProp.ValueKind == JsonValueKind.Number ? (float)ptsProp.GetDouble() : 
@@ -152,11 +152,13 @@ public class ExamAiService(
 
                 // 8️⃣ Prepare Result for UI
                 var student = await _context.Students.FindAsync(studentId);
+                var annotatedImgUrl = res.AnnotatedImageUrl ?? "";
+                
                 examResults.Add(new McqResultDto(
                     res.Filename,
                     new StudentInfoDto(studentId.ToString(), student?.FullName ?? "Unknown"),
                     new McqDetailsDto(recalculatedStudentScore, totalExamPointsByTeacher, enrichedDetails),
-                    res.AnnotatedImageUrl.StartsWith("http") ? res.AnnotatedImageUrl : $"{BaseUrl}/{res.AnnotatedImageUrl.TrimStart('/')}",
+                    annotatedImgUrl.StartsWith("http") ? annotatedImgUrl : $"{BaseUrl}/{annotatedImgUrl.TrimStart('/')}",
                     examId
                 ));
             }
