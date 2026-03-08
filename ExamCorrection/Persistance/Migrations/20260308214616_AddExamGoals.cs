@@ -5,7 +5,7 @@
 namespace ExamCorrection.Migrations
 {
     /// <inheritdoc />
-    public partial class AddStudentExamPaperFields : Migration
+    public partial class AddExamGoals : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

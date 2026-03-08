@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExamCorrection.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260308211751_AddExamGoals")]
+    [Migration("20260308214616_AddExamGoals")]
     partial class AddExamGoals
     {
         /// <inheritdoc />
