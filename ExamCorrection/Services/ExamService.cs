@@ -192,7 +192,7 @@ public class ExamService : IExamService
                      return Result.Failure<FileExamResponse>(studentPdfResult.Error);
                 }
 
-                using var studentReader = new PdfReader(new MemoryStream(studentPdfResult.Value!));
+                using var studentReader = new PdfReader(new MemoryStream(studentPdfResult.Value));
                 using var studentPdfDoc = new PdfDocument(studentReader);
                 studentPdfDoc.CopyPagesTo(1, studentPdfDoc.GetNumberOfPages(), destPdf);
             }
@@ -393,7 +393,7 @@ public class ExamService : IExamService
         {
             return Result.Failure<TeacherExamResponse>(new Error(
                 "ExamPage.NotFound",
-                $"ExamId {request.ExamId} مش موجود فعليًا في قاعدة البيانات اللي الـ API متصلة بيها",
+                $"رقم الامتحان ({request.ExamId}) غير موجود في قاعدة البيانات. يرجى التأكد من إنشاء الامتحان أولاً والحصول على الرقم الصحيح من قائمة الامتحانات.",
                 StatusCodes.Status400BadRequest
             ));
         }

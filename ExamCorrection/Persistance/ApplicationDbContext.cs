@@ -12,6 +12,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StudentExamPaper> StudentExamPapers { set; get; }
     public DbSet<StudentExamPage> StudentExamPages { set; get; }
     public DbSet<TeacherExam> TeacherExams { get; set; } = null!;
+    public DbSet<ExamGoal> ExamGoals { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -45,6 +46,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<ExamGoal>()
+            .HasQueryFilter(e => e.OwnerId == _userContext.UserId)
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(c => c.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<ExamPage>()
             .HasQueryFilter(p => p.Exam.OwnerId  == _userContext.UserId);
 
@@ -70,6 +78,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             if (entry.Entity is StudentExamPaper p && string.IsNullOrEmpty(p.OwnerId))
                 p.OwnerId = _userContext.UserId!;
+
+            if (entry.Entity is ExamGoal g && string.IsNullOrEmpty(g.OwnerId))
+                g.OwnerId = _userContext.UserId!;
         }
 
         return await base.SaveChangesAsync(cancellationToken);

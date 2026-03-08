@@ -21,29 +21,6 @@ public class ExamAiService(
         {
             if (file == null) return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);
 
-            // 0️⃣ Save a raw copy for AI Training Dataset (No Database logic here)
-            try
-            {
-                var env = file.GetType().Assembly.GetType("Microsoft.AspNetCore.Hosting.IWebHostEnvironment"); // We can use IWebHostEnvironment if injected, but since it's not we use a relative path trick or Environment.CurrentDirectory
-                var datasetFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "AI-Dataset");
-                Directory.CreateDirectory(datasetFolder);
-
-                var extension = Path.GetExtension(file.FileName);
-                if (string.IsNullOrEmpty(extension)) extension = ".jpg";
-
-                var newFileName = $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{extension}";
-                var filePath = Path.Combine(datasetFolder, newFileName);
-
-                using (var fileStream = new FileStream(filePath, FileMode.Create))
-                {
-                    file.CopyTo(fileStream); // Synchronous copy since we're in an async method but not using await to keep it simple, or we can use CopyToAsync if we don't dispose the stream early.
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[AI Dataset] Failed to save raw file: {ex.Message}");
-            }
-
             // 1️⃣ Scan barcode to get ExamId
             using var scanContent = new MultipartFormDataContent();
             scanContent.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
@@ -58,7 +35,7 @@ public class ExamAiService(
 
             // 2️⃣ Fetch Teacher Exam Data
             var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == examId);
-            if (teacherExam == null) return Result.Failure<ExamResultsDto>(AiErrors.ExamNotFoundInDb);
+            if (teacherExam == null) return Result.Failure<ExamResultsDto>(new Error("AI.ExamNotFoundInDb", $"لم يتم العثور على نموذج إجابة للامتحان رقم ({examId}) في قاعدة البيانات. يرجى التأكد من حفظ نموذج المعلم لهذا الامتحان أولاً.", StatusCodes.Status400BadRequest));
 
             // 3️⃣ Prepare Clean JSON for AI (Remove Points)
             string cleanedJson = teacherExam.QuestionsJson;
@@ -88,7 +65,7 @@ public class ExamAiService(
             using (var doc = JsonDocument.Parse(teacherExam.QuestionsJson)) {
                 if (doc.RootElement.TryGetProperty("questions", out var questionsArr)) {
                     foreach (var q in questionsArr.EnumerateArray()) {
-                        string qId = (q.GetProperty("id").ValueKind == JsonValueKind.String ? q.GetProperty("id").GetString() : q.GetProperty("id").GetRawText().Trim('\"')) ?? "";
+                        string qId = q.GetProperty("id").ValueKind == JsonValueKind.String ? q.GetProperty("id").GetString() : q.GetProperty("id").GetRawText().Trim('\"');
                         float pts = 0;
                         if (q.TryGetProperty("points", out var ptsProp)) {
                             pts = ptsProp.ValueKind == JsonValueKind.Number ? (float)ptsProp.GetDouble() : 
@@ -112,6 +89,12 @@ public class ExamAiService(
 
                 float recalculatedStudentScore = 0;
                 var enrichedDetails = new List<QuestionResultDto>();
+
+                if (res.Details?.Details == null)
+                {
+                    Console.WriteLine($"[Warning] No details found for student {studentId} in file {res.Filename}");
+                    continue;
+                }
 
                 foreach (var detail in res.Details.Details)
                 {
@@ -152,13 +135,11 @@ public class ExamAiService(
 
                 // 8️⃣ Prepare Result for UI
                 var student = await _context.Students.FindAsync(studentId);
-                var annotatedImgUrl = res.AnnotatedImageUrl ?? "";
-                
                 examResults.Add(new McqResultDto(
                     res.Filename,
                     new StudentInfoDto(studentId.ToString(), student?.FullName ?? "Unknown"),
                     new McqDetailsDto(recalculatedStudentScore, totalExamPointsByTeacher, enrichedDetails),
-                    annotatedImgUrl.StartsWith("http") ? annotatedImgUrl : $"{BaseUrl}/{annotatedImgUrl.TrimStart('/')}",
+                    res.AnnotatedImageUrl.StartsWith("http") ? res.AnnotatedImageUrl : $"{BaseUrl}/{res.AnnotatedImageUrl.TrimStart('/')}",
                     examId
                 ));
             }

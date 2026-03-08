@@ -14,4 +14,17 @@ public class Exam
 
     public ApplicationUser? User { get; set; }
     public ICollection<StudentExamPaper> StudentPapers { get; set; } = [];
+    public ICollection<ExamGoal> Goals { get; set; } = [];
 }
+
+
+
+
+
+
+
+
+
+
+
+
