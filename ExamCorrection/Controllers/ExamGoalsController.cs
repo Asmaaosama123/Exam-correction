@@ -16,7 +16,17 @@ public class ExamGoalsController(IExamGoalService goalService) : ControllerBase
     public async Task<IActionResult> GetByExamId(int examId)
     {
         var result = await _goalService.GetByExamIdAsync(examId);
-        return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
+        if (!result.IsSuccess) return result.ToProblem();
+
+        var dtos = result.Value.Select(g => new
+        {
+            Id = g.Id,
+            ExamId = g.ExamId,
+            GoalText = g.GoalText,
+            QuestionNumbers = g.QuestionNumbers
+        });
+
+        return Ok(dtos);
     }
 
     [HttpPost("{examId}")]
