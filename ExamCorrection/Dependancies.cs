@@ -56,6 +56,7 @@ public static class Dependancies
         services.AddScoped<IExamAiService, ExamAiService>();
         services.AddScoped<IAnalysisService, AnalysisService>();
         services.AddScoped<IExamGoalService, ExamGoalService>();
+        services.AddScoped<IAdminService, AdminService>();
         services.AddHttpClient("AI", (sp, c) =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
