@@ -120,6 +120,7 @@ public class ExamAiService(
                     studentExam.FinalScore = recalculatedStudentScore;
                     studentExam.TotalQuestions = totalExamPointsByTeacher;
                     studentExam.QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails);
+                    studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
                 } else {
                     var examObj = await _context.Exams.FindAsync(examId);
                     if (examObj != null) {
