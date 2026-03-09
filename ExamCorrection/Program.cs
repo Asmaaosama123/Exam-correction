@@ -16,6 +16,27 @@ builder.Services.AddDependecies(builder.Configuration);
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ExamCorrection.Entities.ApplicationUser>>();
+    var adminEmail = "superadmin@wsyli.com";
+    
+    // Create the admin user if it doesn't exist already
+    if (await userManager.FindByEmailAsync(adminEmail) == null)
+    {
+        var adminUser = new ExamCorrection.Entities.ApplicationUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            FirstName = "Super",
+            LastName = "Admin",
+            PhoneNumber = "2221111111",
+            IsDisabled = false
+        };
+        
+        await userManager.CreateAsync(adminUser, "SuperAdmin@2026");
+    }
+}
 // ⚠️ فعل Swagger لكل الـ environments
 app.UseSwagger();
 app.UseSwaggerUI(c =>

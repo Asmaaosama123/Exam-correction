@@ -12,7 +12,7 @@ namespace ExamCorrection.Controllers;
 public class AdminController(IAdminService adminService) : ControllerBase
 {
     private readonly IAdminService _adminService = adminService;
-    private const string AdminEmail = "admin@exam-correction.com";
+    private const string AdminEmail = "superadmin@wsyli.com";
 
     private bool IsAdmin()
     {
