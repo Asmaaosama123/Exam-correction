@@ -19,10 +19,13 @@ public class ProfileService(UserManager<ApplicationUser> userManager, IHttpConte
         if (user is null)
             return Result.Failure<CurrentUserResponse>(UserErrors.InvalidJwtToken);
 
+        var userRoles = await _userManager.GetRolesAsync(user);
+
         var response = new CurrentUserResponse(
             user.Id,
             user.FirstName,
-            user.LastName
+            user.LastName,
+            userRoles
         );
 
         return Result.Success(response);

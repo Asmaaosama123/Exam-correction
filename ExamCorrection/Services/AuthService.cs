@@ -55,7 +55,7 @@ public class AuthService(UserManager<ApplicationUser> userManager, IJwtProvider 
 
             await _userManager.UpdateAsync(user);
 
-            var response = new AuthResponse(user.Id, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+            var response = new AuthResponse(user.Id, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration, userRoles);
 
             return Result.Success(response);
         }
@@ -209,7 +209,7 @@ public class AuthService(UserManager<ApplicationUser> userManager, IJwtProvider 
 
         await _userManager.UpdateAsync(user);
 
-        var response = new AuthResponse(user.Id, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, refreshTokenExpiration);
+        var response = new AuthResponse(user.Id, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, refreshTokenExpiration, userRoles);
 
         return Result.Success(response);
     }

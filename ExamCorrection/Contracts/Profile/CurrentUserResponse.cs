@@ -3,5 +3,6 @@
 public record CurrentUserResponse(
     string Id,
     string FirstName,
-    string LastName
+    string LastName,
+    IEnumerable<string> Roles
 );
