@@ -40,12 +40,17 @@ public class AdminService(
 
     public async Task<Result<UserDto>> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.Email) && string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            return Result.Failure<UserDto>(new Error("Admin.MissingIdentifier", "Email or Phone Number is required.", StatusCodes.Status400BadRequest));
+        }
+
         var user = new ApplicationUser
         {
             FirstName = request.FirstName,
             LastName = request.LastName,
             Email = request.Email,
-            UserName = request.Email,
+            UserName = !string.IsNullOrWhiteSpace(request.Email) ? request.Email : request.PhoneNumber,
             PhoneNumber = request.PhoneNumber,
             IsDisabled = false
         };
@@ -54,7 +59,8 @@ public class AdminService(
 
         if (!result.Succeeded)
         {
-            return Result.Failure<UserDto>(new Error("Admin.CreateUserFailed", "Failed to create user.", StatusCodes.Status400BadRequest));
+            var firstError = result.Errors.FirstOrDefault();
+            return Result.Failure<UserDto>(new Error("Admin.CreateUserFailed", firstError?.Description ?? "Failed to create user.", StatusCodes.Status400BadRequest));
         }
 
         return Result.Success(new UserDto(

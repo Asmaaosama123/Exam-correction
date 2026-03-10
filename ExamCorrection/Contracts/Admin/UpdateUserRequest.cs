@@ -3,6 +3,6 @@ namespace ExamCorrection.Contracts.Admin;
 public record UpdateUserRequest(
     string FirstName,
     string LastName,
-    string PhoneNumber,
+    string? PhoneNumber,
     bool IsDisabled
 );
