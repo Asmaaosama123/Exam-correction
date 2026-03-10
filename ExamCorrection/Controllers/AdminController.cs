@@ -16,8 +16,7 @@ public class AdminController(IAdminService adminService) : ControllerBase
 
     private bool IsAdmin()
     {
-        var email = User.FindFirstValue(ClaimTypes.Email);
-        return email == AdminEmail;
+        return User.IsInRole("Admin");
     }
 
     [HttpGet("stats")]
