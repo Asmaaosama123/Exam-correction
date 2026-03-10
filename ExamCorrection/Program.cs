@@ -35,6 +35,7 @@ using (var scope = app.Services.CreateScope())
         };
         
         await userManager.CreateAsync(adminUser, "SuperAdmin@2026");
+        await userManager.AddToRoleAsync(adminUser, "Admin");
     }
 }
 // ⚠️ فعل Swagger لكل الـ environments
