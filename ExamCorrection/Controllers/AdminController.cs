@@ -8,22 +8,13 @@ namespace ExamCorrection.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Admin")]
 public class AdminController(IAdminService adminService) : ControllerBase
 {
     private readonly IAdminService _adminService = adminService;
-    private const string AdminEmail = "superadmin@wsyli.com";
-
-    private bool IsAdmin()
-    {
-        return User.IsInRole("Admin");
-    }
-
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats(CancellationToken cancellationToken)
     {
-        if (!IsAdmin()) return Forbid();
-
         var result = await _adminService.GetStatsAsync(cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
@@ -31,8 +22,6 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> GetAllUsers(CancellationToken cancellationToken)
     {
-        if (!IsAdmin()) return Forbid();
-
         var result = await _adminService.GetAllUsersAsync(cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
@@ -40,8 +29,6 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpPost("users")]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request, CancellationToken cancellationToken)
     {
-        if (!IsAdmin()) return Forbid();
-
         var result = await _adminService.CreateUserAsync(request, cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
@@ -49,8 +36,6 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpPut("users/{userId}")]
     public async Task<IActionResult> UpdateUser([FromRoute] string userId, [FromBody] UpdateUserRequest request, CancellationToken cancellationToken)
     {
-        if (!IsAdmin()) return Forbid();
-
         var result = await _adminService.UpdateUserAsync(userId, request, cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
@@ -58,8 +43,6 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpDelete("users/{userId}")]
     public async Task<IActionResult> DeleteUser([FromRoute] string userId, CancellationToken cancellationToken)
     {
-        if (!IsAdmin()) return Forbid();
-
         var result = await _adminService.DeleteUserAsync(userId, cancellationToken);
         return result.IsSuccess ? Ok() : result.ToProblem();
     }

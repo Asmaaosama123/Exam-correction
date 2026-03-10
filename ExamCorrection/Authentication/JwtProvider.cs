@@ -6,14 +6,19 @@ public class JwtProvider(IOptions<JwtOptions> jwtOptions) : IJwtProvider
 
 	public (string token, int expiresIn) GenerateToken(ApplicationUser user, IEnumerable<string> roles)
 	{
-		Claim[] claims = [
+		var claims = new List<Claim>
+		{
 			new(JwtRegisteredClaimNames.Sub, user.Id),
 			new(JwtRegisteredClaimNames.GivenName, user.FirstName),
 			new(JwtRegisteredClaimNames.FamilyName, user.LastName),
-			new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+			new(ClaimTypes.Email, user.Email ?? string.Empty),
 			new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-			new(nameof(roles), JsonSerializer.Serialize(roles), JsonClaimValueTypes.JsonArray),
-		];
+		};
+
+		foreach (var role in roles)
+		{
+			claims.Add(new Claim(ClaimTypes.Role, role));
+		}
 
 		var symmetricSecurityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key));
 
