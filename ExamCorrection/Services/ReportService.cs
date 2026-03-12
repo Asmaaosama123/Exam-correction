@@ -3,6 +3,7 @@
 using ExamCorrection.Contracts.Reports;
 using Microsoft.AspNetCore.Components.Web;
 using Razor.Templating.Core;
+using System.IO;
 using System.Net.Http;
 using iText.Layout.Element;
 using iText.Layout.Properties;
@@ -442,6 +443,7 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                 }
                 else
                 {
+                    bool imageAdded = false;
                     // Resolve relative URL using AI Server BaseUrl if available
                     var baseUrl = _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/');
                     if (!string.IsNullOrEmpty(baseUrl))
@@ -450,16 +452,16 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                         try
                         {
                             using var httpClient = new HttpClient();
+                            httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
                             var imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
                             var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
                             var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
                             document.Add(image);
                             
                             document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
-                                .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
                             
-                            // Skip local path handling if successful
-                            continue;
+                            imageAdded = true;
                         }
                         catch (Exception ex)
                         {
@@ -467,21 +469,24 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                         }
                     }
 
-                    // Local path handling (as fallback or if no base URL)
-                    localImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
-                    if (File.Exists(localImagePath))
+                    if (!imageAdded)
                     {
-                        var imageData = iText.IO.Image.ImageDataFactory.Create(localImagePath);
-                        var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
-                        document.Add(image);
-                        
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
-                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
-                    }
-                    else
-                    {
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"لم يتم العثور على صورة ورقة الطالب: {result.Student.FullName}"))
-                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                        // Local path handling (as fallback or if no base URL)
+                        localImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
+                        if (File.Exists(localImagePath))
+                        {
+                            var imageData = iText.IO.Image.ImageDataFactory.Create(localImagePath);
+                            var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
+                            document.Add(image);
+                            
+                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
+                        }
+                        else
+                        {
+                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"لم يتم العثور على صورة ورقة الطالب: {result.Student.FullName}"))
+                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
+                        }
                     }
                 }
                 
