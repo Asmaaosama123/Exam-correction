@@ -3,14 +3,18 @@
 using ExamCorrection.Contracts.Reports;
 using Microsoft.AspNetCore.Components.Web;
 using Razor.Templating.Core;
-using System.IO;
-using System.Net.WebSockets;
+using System.Net.Http;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+using iText.Kernel.Geom;
+using Path = System.IO.Path;
 
 namespace ExamCorrection.Services;
 
-public class ReportService(ApplicationDbContext context) : IReportService
+public class ReportService(ApplicationDbContext context, IConfiguration configuration) : IReportService
 {
     private readonly ApplicationDbContext _context = context;
+    private readonly IConfiguration _configuration = configuration;
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToExcelAsync(IEnumerable<int> classIds)
     {
@@ -438,7 +442,32 @@ public class ReportService(ApplicationDbContext context) : IReportService
                 }
                 else
                 {
-                    // Local path handling
+                    // Resolve relative URL using AI Server BaseUrl if available
+                    var baseUrl = _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/');
+                    if (!string.IsNullOrEmpty(baseUrl))
+                    {
+                        var fullImageUrl = $"{baseUrl}/{imageUrl.TrimStart('/')}";
+                        try
+                        {
+                            using var httpClient = new HttpClient();
+                            var imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
+                            var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
+                            var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
+                            document.Add(image);
+                            
+                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                                .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                            
+                            // Skip local path handling if successful
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error fetching relative image {fullImageUrl}: {ex.Message}");
+                        }
+                    }
+
+                    // Local path handling (as fallback or if no base URL)
                     localImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
                     if (File.Exists(localImagePath))
                     {
