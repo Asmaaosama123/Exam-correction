@@ -26,14 +26,25 @@ public class AdminService(
     {
         var users = await _userManager.Users.ToListAsync(cancellationToken);
         
-        var dtos = users.Select(u => new UserDto(
-            Id: u.Id,
-            FirstName: u.FirstName ?? string.Empty,
-            LastName: u.LastName ?? string.Empty,
-            Email: u.Email ?? string.Empty,
-            PhoneNumber: u.PhoneNumber ?? string.Empty,
-            IsDisabled: u.IsDisabled
-        ));
+        var pageCounts = await _dbContext.StudentExamPages
+            .IgnoreQueryFilters()
+            .GroupBy(p => p.StudentExamPaper.OwnerId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var dtos = users.Select(u =>
+        {
+            var correctedCount = pageCounts.FirstOrDefault(pc => pc.UserId == u.Id)?.Count ?? 0;
+            return new UserDto(
+                Id: u.Id,
+                FirstName: u.FirstName ?? string.Empty,
+                LastName: u.LastName ?? string.Empty,
+                Email: u.Email ?? string.Empty,
+                PhoneNumber: u.PhoneNumber ?? string.Empty,
+                IsDisabled: u.IsDisabled,
+                CorrectedPagesCount: correctedCount
+            );
+        });
 
         return Result.Success(dtos);
     }
@@ -69,7 +80,8 @@ public class AdminService(
             LastName: user.LastName,
             Email: user.Email ?? string.Empty,
             PhoneNumber: user.PhoneNumber ?? string.Empty,
-            IsDisabled: user.IsDisabled
+            IsDisabled: user.IsDisabled,
+            CorrectedPagesCount: 0
         ));
     }
 
@@ -99,7 +111,8 @@ public class AdminService(
             LastName: user.LastName,
             Email: user.Email ?? string.Empty,
             PhoneNumber: user.PhoneNumber ?? string.Empty,
-            IsDisabled: user.IsDisabled
+            IsDisabled: user.IsDisabled,
+            CorrectedPagesCount: 0 // Will be recalculated on next list
         ));
     }
 

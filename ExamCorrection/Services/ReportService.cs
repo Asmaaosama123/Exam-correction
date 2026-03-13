@@ -12,10 +12,11 @@ using Path = System.IO.Path;
 
 namespace ExamCorrection.Services;
 
-public class ReportService(ApplicationDbContext context, IConfiguration configuration) : IReportService
+public class ReportService(ApplicationDbContext context, IConfiguration configuration, IUserContext userContext) : IReportService
 {
     private readonly ApplicationDbContext _context = context;
     private readonly IConfiguration _configuration = configuration;
+    private readonly IUserContext _userContext = userContext;
 
     public async Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToExcelAsync(IEnumerable<int> classIds)
     {
@@ -389,10 +390,18 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         if (exam == null)
             return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
 
-        var results = await _context.StudentExamPapers
+        var query = _context.StudentExamPapers
             .Include(x => x.Student)
             .ThenInclude(x => x.Class)
-            .Where(x => x.ExamId == examId && !string.IsNullOrEmpty(x.AnnotatedImageUrl))
+            .Include(x => x.User)
+            .Where(x => x.ExamId == examId && !string.IsNullOrEmpty(x.AnnotatedImageUrl));
+
+        if (!_userContext.IsAdmin)
+        {
+            query = query.Where(x => x.OwnerId == _userContext.UserId);
+        }
+
+        var results = await query
             .OrderBy(x => x.Student.FullName)
             .ToListAsync();
 
@@ -430,8 +439,9 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                         var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
                         document.Add(image);
                         
+                        var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
                         // Add student name as footer or header
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
                             .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                     }
                     catch (Exception ex)
@@ -458,7 +468,8 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                             var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
                             document.Add(image);
                             
-                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                            var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
+                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
                                 .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
                             
                             imageAdded = true;
@@ -479,7 +490,8 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                             var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
                             document.Add(image);
                             
-                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}"))
+                            var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
+                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
                                 .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
                         }
                         else

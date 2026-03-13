@@ -8,10 +8,12 @@ namespace ExamCorrection.Services
     public class GradingService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IUserContext _userContext;
 
-        public GradingService(ApplicationDbContext context)
+        public GradingService(ApplicationDbContext context, IUserContext userContext)
         {
             _context = context;
+            _userContext = userContext;
         }
 
         public async Task<GradingResultsResponse> GetGradingResultsAsync(
@@ -25,7 +27,11 @@ namespace ExamCorrection.Services
                 .Include(p => p.Student)
                 .ThenInclude(s => s.Class)
                 .Include(p => p.Exam)
+                .Include(p => p.User)
                 .AsQueryable();
+
+            if (!_userContext.IsAdmin)
+                query = query.Where(p => p.OwnerId == _userContext.UserId);
 
             if (examId.HasValue)
                 query = query.Where(p => p.ExamId == examId.Value);
@@ -61,6 +67,7 @@ namespace ExamCorrection.Services
                 GradedAt = p.GeneratedAt,
                 PdfPath = p.GeneratedPdfPath,
                 AnnotatedImageUrl = p.AnnotatedImageUrl,
+                TeacherName = p.User != null ? $"{p.User.FirstName} {p.User.LastName}".Trim() : "غير معروف",
                 QuestionDetails = (string.IsNullOrEmpty(p.QuestionDetailsJson) || p.QuestionDetailsJson == "{}")
                     ? new List<QuestionDetailDto>() 
                     : JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<QuestionDetailDto>()

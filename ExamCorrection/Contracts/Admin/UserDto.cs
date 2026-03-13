@@ -6,5 +6,6 @@ public record UserDto(
     string LastName,
     string Email,
     string PhoneNumber,
-    bool IsDisabled
+    bool IsDisabled,
+    int CorrectedPagesCount = 0
 );

@@ -17,6 +17,7 @@ namespace ExamCorrection.Contracts.Grading
         public DateTime GradedAt { get; set; }
         public string? PdfPath { get; set; }
         public string? AnnotatedImageUrl { get; set; }
+        public string TeacherName { get; set; } = string.Empty;
         public List<QuestionDetailDto> QuestionDetails { get; set; } = new();
     }
 
