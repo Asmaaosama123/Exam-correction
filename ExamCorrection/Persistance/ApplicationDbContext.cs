@@ -19,45 +19,45 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
 
         builder.Entity<Class>()
-            .HasQueryFilter(c => !c.IsDisabled && c.OwnerId  == _userContext.UserId )
+            .HasQueryFilter(c => _userContext.IsAdmin || (!c.IsDisabled && c.OwnerId  == _userContext.UserId ))
             .HasOne(s => s.User)
             .WithMany()
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Student>()
-            .HasQueryFilter(s => !s.IsDisabled && s.OwnerId  == _userContext.UserId)
+            .HasQueryFilter(s => _userContext.IsAdmin || (!s.IsDisabled && s.OwnerId  == _userContext.UserId))
             .HasOne(s => s.User)
             .WithMany()
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Exam>()
-            .HasQueryFilter(e => e.OwnerId  == _userContext.UserId)
+            .HasQueryFilter(e => _userContext.IsAdmin || (e.OwnerId  == _userContext.UserId))
             .HasOne(s => s.User)
             .WithMany()
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<StudentExamPaper>()
-            .HasQueryFilter(e => e.OwnerId  == _userContext.UserId)
+            .HasQueryFilter(e => _userContext.IsAdmin || (e.OwnerId  == _userContext.UserId))
             .HasOne(s => s.User)
             .WithMany()
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<ExamGoal>()
-            .HasQueryFilter(e => e.OwnerId == _userContext.UserId)
+            .HasQueryFilter(e => _userContext.IsAdmin || (e.OwnerId == _userContext.UserId))
             .HasOne(s => s.User)
             .WithMany()
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<ExamPage>()
-            .HasQueryFilter(p => p.Exam.OwnerId  == _userContext.UserId);
+            .HasQueryFilter(p => _userContext.IsAdmin || (p.Exam.OwnerId  == _userContext.UserId));
 
         builder.Entity<StudentExamPage>()
-            .HasQueryFilter(p => p.StudentExamPaper.OwnerId  == _userContext.UserId);
+            .HasQueryFilter(p => _userContext.IsAdmin || (p.StudentExamPaper.OwnerId  == _userContext.UserId));
 
         base.OnModelCreating(builder);
     }
