@@ -92,9 +92,9 @@ public class ReportsController(IReportService reportService) : ControllerBase
     }
 
     [HttpGet("export-corrected-papers-pdf")]
-    public async Task<IActionResult> ExportCorrectedPapersPdf([FromQuery] int examId)
+    public async Task<IActionResult> ExportCorrectedPapersPdf([FromQuery] int examId, [FromQuery] string? teacherId = null)
     {
-        var result = await _reportService.ExportCorrectedPapersPdfAsync(examId);
+        var result = await _reportService.ExportCorrectedPapersPdfAsync(examId, teacherId);
 
         if (!result.IsSuccess)
             return BadRequest(result.Error);

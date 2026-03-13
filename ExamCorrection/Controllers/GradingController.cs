@@ -22,9 +22,10 @@ namespace ExamCorrection.Controllers
             int pageSize = 10,
             int? examId = null,
             int? classId = null,
-            string? searchValue = null)
+            string? searchValue = null,
+            string? teacherId = null)
         {
-            var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue);
+            var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue, teacherId);
             return Ok(results);
         }
     }

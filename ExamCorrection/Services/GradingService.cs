@@ -21,7 +21,8 @@ namespace ExamCorrection.Services
        int pageSize = 10,
        int? examId = null,
        int? classId = null,
-       string? searchValue = null)
+       string? searchValue = null,
+       string? teacherId = null)
         {
             var query = _context.StudentExamPapers
                 .Include(p => p.Student)
@@ -31,7 +32,13 @@ namespace ExamCorrection.Services
                 .AsQueryable();
 
             if (!_userContext.IsAdmin)
+            {
                 query = query.Where(p => p.OwnerId == _userContext.UserId);
+            }
+            else if (!string.IsNullOrEmpty(teacherId))
+            {
+                query = query.Where(p => p.OwnerId == teacherId);
+            }
 
             if (examId.HasValue)
                 query = query.Where(p => p.ExamId == examId.Value);

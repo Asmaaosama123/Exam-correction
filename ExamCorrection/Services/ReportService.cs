@@ -384,7 +384,7 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         return Result.Success((ms.ToArray(), fileName));
     }
 
-    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId)
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null)
     {
         var exam = await _context.Exams.FindAsync(examId);
         if (exam == null)
@@ -396,7 +396,14 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
             .Include(x => x.User)
             .Where(x => x.ExamId == examId && !string.IsNullOrEmpty(x.AnnotatedImageUrl));
 
-        if (!_userContext.IsAdmin)
+        if (_userContext.IsAdmin)
+        {
+            if (!string.IsNullOrEmpty(teacherId))
+            {
+                query = query.Where(x => x.OwnerId == teacherId);
+            }
+        }
+        else
         {
             query = query.Where(x => x.OwnerId == _userContext.UserId);
         }
