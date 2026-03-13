@@ -6,5 +6,6 @@ public record ExamResponse(
     string Subject,
     string PdfPath,
     int NumberOfPages,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string OwnerId
 );
