@@ -91,6 +91,8 @@ namespace ExamCorrection.Services
                 HasNextPage = pageNumber < totalPages,
                 HasPreviousPage = pageNumber > 1
             };
+        }
+
         public async Task<bool> UpdateManualGradingAsync(int paperId, List<ManualCorrectionDto> corrections)
         {
             var paper = await _context.StudentExamPapers.FindAsync(paperId);

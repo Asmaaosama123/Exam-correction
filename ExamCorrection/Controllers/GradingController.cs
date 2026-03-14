@@ -27,6 +27,8 @@ namespace ExamCorrection.Controllers
         {
             var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue, teacherId);
             return Ok(results);
+        }
+
         [HttpPost("{id}/manual-update")]
         public async Task<IActionResult> UpdateManualGrading(int id, [FromBody] List<ManualCorrectionDto> corrections)
         {
