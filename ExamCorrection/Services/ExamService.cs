@@ -364,6 +364,10 @@ public class ExamService : IExamService
             if (existing is not null)
             {
                 existing.FinalScore = item.Score;
+                existing.TotalQuestions = item.Total;
+                existing.AnnotatedImageUrl = item.AnnotatedImageUrl;
+                existing.QuestionDetailsJson = System.Text.Json.JsonSerializer.Serialize(item.Details);
+
                 examResults.Add(new ExamCorrectionResponse
                 (
                     examIdParsed,

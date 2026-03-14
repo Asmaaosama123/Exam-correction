@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Contracts.Grading;
+using ExamCorrection.Contracts.Grading;
 using ExamCorrection.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,6 +27,11 @@ namespace ExamCorrection.Controllers
         {
             var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue, teacherId);
             return Ok(results);
+        [HttpPost("{id}/manual-update")]
+        public async Task<IActionResult> UpdateManualGrading(int id, [FromBody] List<ManualCorrectionDto> corrections)
+        {
+            var success = await _gradingService.UpdateManualGradingAsync(id, corrections);
+            return success ? Ok() : BadRequest("تعذر تحديث البيانات");
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Contracts.Grading;
+using ExamCorrection.Contracts.Grading;
 using ExamCorrection.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -91,6 +91,40 @@ namespace ExamCorrection.Services
                 HasNextPage = pageNumber < totalPages,
                 HasPreviousPage = pageNumber > 1
             };
+        public async Task<bool> UpdateManualGradingAsync(int paperId, List<ManualCorrectionDto> corrections)
+        {
+            var paper = await _context.StudentExamPapers.FindAsync(paperId);
+            if (paper == null || string.IsNullOrEmpty(paper.QuestionDetailsJson))
+                return false;
+
+            var details = JsonSerializer.Deserialize<List<QuestionDetailDto>>(paper.QuestionDetailsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (details == null) return false;
+
+            foreach (var corr in corrections)
+            {
+                var target = details.FirstOrDefault(d => d.Id == corr.QuestionId);
+                if (target != null)
+                {
+                    target.Ok = corr.IsCorrect;
+                    // If manually marked as correct, we can also set pred to gt or just keep it blank but set ok=true
+                    // The business logic here: Teacher says "this is correct" -> ok = true
+                    // We need to decide if we update points. Usually Ok=true means points = question_value.
+                    // Assuming the API already provided points per question.
+                }
+            }
+
+            // Recalculate FinalScore
+            paper.FinalScore = details.Where(d => d.Ok).Sum(d => d.Points);
+            paper.QuestionDetailsJson = JsonSerializer.Serialize(details);
+
+            await _context.SaveChangesAsync();
+            return true;
         }
     }
+
+    public class ManualCorrectionDto
+    {
+        public string QuestionId { get; set; } = string.Empty;
+        public bool IsCorrect { get; set; }
     }
+}
