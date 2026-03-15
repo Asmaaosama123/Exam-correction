@@ -16,15 +16,3 @@ public class Exam
     public ICollection<StudentExamPaper> StudentPapers { get; set; } = [];
     public ICollection<ExamGoal> Goals { get; set; } = [];
 }
-
-
-
-
-
-
-
-
-
-
-
-

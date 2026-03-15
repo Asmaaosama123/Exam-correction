@@ -9,4 +9,6 @@ public class QuestionAnalysisDto
     public double SuccessRate { get; set; }
     
     public string QuestionDisplay { get; set; } = string.Empty;
+
+    public string Type { get; set; } = string.Empty;
 }

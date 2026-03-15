@@ -132,4 +132,64 @@ public class AnalysisController : ControllerBase
 
         return Ok(papers);
     }
+
+    [HttpGet("student/{studentId}/progress")]
+    public async Task<IActionResult> GetStudentProgress(int studentId)
+    {
+        var student = await _context.Students
+            .Include(s => s.Class)
+            .FirstOrDefaultAsync(s => s.Id == studentId);
+
+        if (student == null)
+            return NotFound("Student not found.");
+
+        var papers = await _context.StudentExamPapers
+            .Include(p => p.Exam)
+            .Where(p => p.StudentId == studentId)
+            .ToListAsync();
+
+        var examIds = papers.Select(p => p.ExamId).Distinct().ToList();
+        var goals = await _context.ExamGoals
+            .IgnoreQueryFilters()
+            .Where(g => examIds.Contains(g.ExamId))
+            .ToListAsync();
+
+        var result = _analysisService.GenerateStudentProgress(student, papers, goals);
+
+        return Ok(result);
+    }
+
+    [HttpGet("students-progress-summary")]
+    public async Task<IActionResult> GetStudentsProgressSummary()
+    {
+        // Get the current user ID
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        // Fetch students related to the teacher
+        // Get all students that have taken exams created by this teacher
+        var teacherExamsQuery = _context.Exams.Where(e => e.OwnerId == userId);
+       
+        var teacherExamIds = await teacherExamsQuery.Select(e => e.Id).ToListAsync();
+
+        var papers = await _context.StudentExamPapers
+            .IgnoreQueryFilters()
+            .Where(p => teacherExamIds.Contains(p.ExamId))
+            .ToListAsync();
+
+        var studentIdsWithExams = papers.Select(p => p.StudentId).Distinct().ToList();
+
+        var students = await _context.Students
+            .Include(s => s.Class)
+            .Where(s => studentIdsWithExams.Contains(s.Id))
+            .ToListAsync();
+
+        var goals = await _context.ExamGoals
+            .IgnoreQueryFilters()
+            .Where(g => teacherExamIds.Contains(g.ExamId))
+            .ToListAsync();
+
+        var result = _analysisService.GetStudentsProgressSummary(students, papers, goals);
+
+        return Ok(result);
+    }
 }

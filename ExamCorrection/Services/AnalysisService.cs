@@ -1,4 +1,5 @@
 using ExamCorrection.Contracts.Analysis;
+using ExamCorrection.Dtos.Reports;
 using ExamCorrection.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -10,36 +11,42 @@ public class AnalysisService : IAnalysisService
 {
     public ClassReportDto GenerateClassReport(List<StudentExamPaper> papers, List<ExamGoal> goals)
     {
-        if (!papers.Any())
-            return new ClassReportDto();
-
-        int totalStudents = papers.Count;
-        
-        var allQuestions = papers
-            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson ?? "[]"))
+        var validPapers = papers
+            .Where(p => !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
             .ToList();
 
-        if (!allQuestions.Any() || !allQuestions.First().Any())
-             return new ClassReportDto { TotalStudents = totalStudents };
+        if (!validPapers.Any())
+            return new ClassReportDto { TotalStudents = papers.Count };
 
-        int totalQuestionsCount = allQuestions.First().Count;
+        int validTotalStudents = validPapers.Count;
+        
+        var allQuestions = validPapers
+            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson) ?? new List<QuestionDetailDto>())
+            .Where(q => q.Any())
+            .ToList();
+
+        var firstValid = allQuestions.FirstOrDefault();
+        if (firstValid == null)
+             return new ClassReportDto { TotalStudents = papers.Count };
+
+        int totalQuestionsCount = firstValid.Count;
         int totalCorrectAnswers = allQuestions.Sum(qList => qList.Count(q => q.Ok));
 
-        double overallPercentage = (totalStudents * totalQuestionsCount) == 0 
+        double overallPercentage = (validTotalStudents * totalQuestionsCount) == 0 
             ? 0 
-            : (double)totalCorrectAnswers / (totalStudents * totalQuestionsCount) * 100;
+            : (double)totalCorrectAnswers / (validTotalStudents * totalQuestionsCount) * 100;
 
-        int passed = papers.Count(p => p.TotalQuestions > 0 && (p.FinalScore / p.TotalQuestions) >= 0.5);
-        int failed = totalStudents - passed;
+        int passed = validPapers.Count(p => p.TotalQuestions > 0 && (p.FinalScore / p.TotalQuestions) >= 0.5);
+        int failed = validTotalStudents - passed;
 
         return new ClassReportDto
         {
-            TotalStudents = totalStudents,
+            TotalStudents = validTotalStudents,
             OverallPercentage = overallPercentage,
             PassedStudents = passed,
             FailedStudents = failed,
-            QuestionAnalysis = AnalyzeQuestions(papers),
-            GoalAnalysis = AnalyzeGoals(papers, goals)
+            QuestionAnalysis = AnalyzeQuestions(validPapers),
+            GoalAnalysis = AnalyzeGoals(validPapers, goals)
         };
     }
 
@@ -58,7 +65,7 @@ public class AnalysisService : IAnalysisService
 
         return new StudentReportDto
         {
-            StudentName = "Student " + paper.StudentId,
+            StudentName = paper.Student?.FullName ?? ("طالب " + paper.StudentId),
             TotalCorrect = correctAnswers,
             Percentage = percentage,
             Status = percentage >= 50 ? "ناجح" : "بحاجة دعم",
@@ -70,14 +77,14 @@ public class AnalysisService : IAnalysisService
     public List<QuestionAnalysisDto> AnalyzeQuestions(List<StudentExamPaper> papers)
     {
         var allStudents = papers
-            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>
-                (p.QuestionDetailsJson ?? "[]"))
+            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson ?? "[]") ?? new List<QuestionDetailDto>())
+            .Where(q => q.Any())
             .ToList();
 
-        if (!allStudents.Any() || !allStudents.First().Any())
+        var firstStudentQuestions = allStudents.FirstOrDefault();
+        if (firstStudentQuestions == null)
             return new List<QuestionAnalysisDto>();
 
-        var firstStudentQuestions = allStudents.First();
         int totalQuestions = firstStudentQuestions.Count;
 
         var result = new List<QuestionAnalysisDto>();
@@ -86,14 +93,14 @@ public class AnalysisService : IAnalysisService
         {
             int correctCount = allStudents.Count(s => s.Count > i && s[i].Ok);
 
-            double successRate =
+            double successRate = allStudents.Count == 0 ? 0 :
                 (double)correctCount / allStudents.Count * 100;
 
             var qType = firstStudentQuestions[i].Type;
             string displayType = qType.ToLower() switch
             {
                 "mcq" => "اختيار",
-                "true_false" => "صح/خطأ",
+                "true_false" or "tf" or "true" or "false" => "صح/خطأ",
                 "essay" => "مقالي",
                 "complete" => "أكمل",
                 _ => qType
@@ -103,6 +110,7 @@ public class AnalysisService : IAnalysisService
             {
                 QuestionNumber = i + 1,
                 QuestionDisplay = $"{firstStudentQuestions[i].Id} ({displayType})",
+                Type = firstStudentQuestions[i].Type,
                 CorrectCount = correctCount,
                 SuccessRate = successRate
             });
@@ -114,10 +122,12 @@ public class AnalysisService : IAnalysisService
     public List<GoalAnalysisDto> AnalyzeGoals(List<StudentExamPaper> papers, List<ExamGoal> goals)
     {
         var allStudentsQuestions = papers
-            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson ?? "[]"))
+            .Select(p => JsonSerializer.Deserialize<List<QuestionDetailDto>>(p.QuestionDetailsJson ?? "[]") ?? new List<QuestionDetailDto>())
+            .Where(q => q.Any())
             .ToList();
 
-        if (!allStudentsQuestions.Any()) return new();
+        var firstStudent = allStudentsQuestions.FirstOrDefault();
+        if (firstStudent == null) return new();
 
         var result = new List<GoalAnalysisDto>();
 
@@ -135,23 +145,35 @@ public class AnalysisService : IAnalysisService
                     if (parts.Length == 2 && int.TryParse(parts[0], out int targetNum))
                     {
                         var targetType = parts[1].ToLower();
-                        // Find the index of the n-th question of this type
-                        // Note: Analysis uses first student's questions to determine indices if needed, 
-                        // but here we can just use the indices directly if we find them in any student's list (all should have same structure).
-                        if (allStudentsQuestions.Any())
+                        
+                        // normalize targetType for comparison
+                        bool targetIsTF =
+                            targetType == "true_false" ||
+                            targetType == "truefalse" ||
+                            targetType == "tf" ||
+                            targetType == "true" ||
+                            targetType == "false";
+                        if (firstStudent != null)
                         {
-                            var firstStudent = allStudentsQuestions.First();
-                            int typeCount = 0;
-                            for (int i = 0; i < firstStudent.Count; i++)
+                            int absoluteIndex = targetNum - 1;
+
+                            if (absoluteIndex >= 0 && absoluteIndex < firstStudent.Count)
                             {
-                                if (firstStudent[i].Type.ToLower() == targetType)
+                                var qType = firstStudent[absoluteIndex].Type.ToLower();
+                                bool qIsTF =
+                                    qType == "true_false" ||
+                                    qType == "truefalse" ||
+                                    qType == "tf" ||
+    qType == "true" ||
+    qType == "false";
+                                // Match by absolute index. 
+                                // We check type for sanity, but allow 'mcq' as a fallback 
+                                // because some questions might have been saved as 'mcq' before.
+                                bool match = (targetIsTF && qIsTF) || (qType == targetType) || (targetType == "mcq");
+
+                                if (match)
                                 {
-                                    typeCount++;
-                                    if (typeCount == targetNum)
-                                    {
-                                        matchedIndices.Add(i);
-                                        break;
-                                    }
+                                    matchedIndices.Add(absoluteIndex);
                                 }
                             }
                         }
@@ -166,7 +188,7 @@ public class AnalysisService : IAnalysisService
 
             if (!matchedIndices.Any()) continue;
 
-            int totalGoalQuestions = matchedIndices.Count * papers.Count;
+            int totalGoalQuestions = matchedIndices.Count * allStudentsQuestions.Count;
             int totalGoalCorrect = 0;
 
             foreach (var studentQuestions in allStudentsQuestions)
@@ -185,5 +207,106 @@ public class AnalysisService : IAnalysisService
         }
 
         return result;
+    }
+
+    public StudentProgressDto GenerateStudentProgress(Student student, List<StudentExamPaper> papers, List<ExamGoal> goals)
+    {
+        var summaries = papers.Select(p => new StudentExamSummaryDto
+        {
+            ExamId = p.ExamId,
+            ExamTitle = p.Exam?.Title ?? "اختبار " + p.ExamId,
+            Score = p.FinalScore ?? 0,
+            TotalScore = p.TotalQuestions ?? 0,
+            Percentage = (p.TotalQuestions > 0) ? ((p.FinalScore ?? 0) / (float)p.TotalQuestions * 100f) : 0,
+            Date = p.GeneratedAt,
+            GoalAnalysis = AnalyzeGoals(new List<StudentExamPaper> { p }, goals.Where(g => g.ExamId == p.ExamId).ToList())
+        }).OrderBy(s => s.Date).ToList();
+
+        float average = summaries.Any() ? summaries.Average(s => s.Percentage) : 0;
+
+        string level = average switch
+        {
+            >= 90 => "ممتاز",
+            >= 80 => "جيد جداً",
+            >= 65 => "جيد",
+            >= 50 => "مقبول",
+            _ => "متعثر"
+        };
+
+        return new StudentProgressDto
+        {
+            StudentId = student.Id,
+            StudentName = student.FullName,
+            ClassName = student.Class?.Name ?? "غير محدد",
+            OverallAverage = average,
+            PerformanceLevel = level,
+            ExamSummaries = summaries
+        };
+    }
+
+    public List<StudentProgressSummaryDto> GetStudentsProgressSummary(List<Student> students, List<StudentExamPaper> allPapers, List<ExamGoal> goals)
+    {
+        var summaries = new List<StudentProgressSummaryDto>();
+
+        foreach (var student in students)
+        {
+            var studentPapers = allPapers.Where(p => p.StudentId == student.Id).OrderBy(p => p.GeneratedAt).ToList();
+            if (!studentPapers.Any()) continue;
+
+            float totalPercentage = 0;
+            foreach (var p in studentPapers)
+            {
+                totalPercentage += (p.TotalQuestions > 0) ? ((p.FinalScore ?? 0) / (float)p.TotalQuestions * 100f) : 0;
+            }
+
+            float average = totalPercentage / studentPapers.Count;
+
+            string level = average switch
+            {
+                >= 90 => "ممتاز",
+                >= 80 => "جيد جداً",
+                >= 65 => "جيد",
+                >= 50 => "مقبول",
+                _ => "متعثر"
+            };
+
+            // Calculate Strengths and Weaknesses across all papers
+            var goalHistory = studentPapers.SelectMany(p => {
+                var paperGoals = goals.Where(g => g.ExamId == p.ExamId).ToList();
+                return AnalyzeGoals(new List<StudentExamPaper> { p }, paperGoals);
+            }).GroupBy(g => g.GoalText)
+            .Select(g => new {
+                GoalText = g.Key,
+                AvgRate = g.Average(x => x.SuccessRate),
+                History = g.ToList() // history of success rates for this goal
+            }).ToList();
+
+            var strengths = goalHistory.Where(g => g.AvgRate >= 50).Select(g => g.GoalText).Take(3).ToList();
+            var weaknesses = goalHistory.Where(g => g.AvgRate < 50).Select(g => g.GoalText).Take(3).ToList();
+
+            // Calculate overall trend (change from first half to second half, or last vs previous)
+            double change = 0;
+            if (studentPapers.Count >= 2)
+            {
+                float last = (studentPapers.Last().TotalQuestions > 0) ? ((studentPapers.Last().FinalScore ?? 0) / (float)studentPapers.Last().TotalQuestions * 100f) : 0;
+                float prev = (studentPapers[studentPapers.Count - 2].TotalQuestions > 0) ? ((studentPapers[studentPapers.Count - 2].FinalScore ?? 0) / (float)studentPapers[studentPapers.Count - 2].TotalQuestions * 100f) : 0;
+                change = last - prev;
+            }
+
+            summaries.Add(new StudentProgressSummaryDto
+            {
+                StudentId = student.Id,
+                StudentName = student.FullName,
+                ClassName = student.Class?.Name ?? "غير محدد",
+                OverallAverage = average,
+                PerformanceLevel = level,
+                ExamsTaken = studentPapers.Count,
+                Strengths = strengths,
+                Weaknesses = weaknesses,
+                Change = change
+            });
+        }
+
+        return summaries.OrderByDescending(s => s.OverallAverage).ToList();
     }
 }
