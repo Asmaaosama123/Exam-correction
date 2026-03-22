@@ -11,6 +11,11 @@ namespace ExamCorrection.Persistance.Migrations
     public partial class ConsolidatedStructure : Migration
     {
         /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            // Empty body to satisfy abstract member while keeping original logic commented out
+        }
+
         // protected override void Up(MigrationBuilder migrationBuilder)
         // {
         //     migrationBuilder.CreateTable(
