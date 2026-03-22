@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Persistance;
+namespace ExamCorrection.Persistance;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IUserContext userContext) :
     IdentityDbContext<ApplicationUser, ApplicationRole, string>(options)
@@ -13,6 +13,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StudentExamPage> StudentExamPages { set; get; }
     public DbSet<TeacherExam> TeacherExams { get; set; } = null!;
     public DbSet<ExamGoal> ExamGoals { get; set; } = null!;
+    public DbSet<Complaint> Complaints { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -53,6 +54,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<Complaint>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(c => c.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<ExamPage>()
             .HasQueryFilter(p => _userContext.IsAdmin || (p.Exam.OwnerId  == _userContext.UserId));
 
@@ -81,6 +88,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             if (entry.Entity is ExamGoal g && string.IsNullOrEmpty(g.OwnerId))
                 g.OwnerId = _userContext.UserId!;
+
+            if (entry.Entity is Complaint cmp && string.IsNullOrEmpty(cmp.OwnerId))
+                cmp.OwnerId = _userContext.UserId!;
         }
 
         return await base.SaveChangesAsync(cancellationToken);

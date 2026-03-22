@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Clients;
+using ExamCorrection.Clients;
 using FluentValidation.AspNetCore;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -46,6 +46,7 @@ public static class Dependancies
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IEmailSender, EmailService>();
+        services.AddScoped<IComplaintService, ComplaintService>();
         services.AddScoped<IStudentServices, StudentServices>();
         services.AddScoped<IClassService, ClassService>();
         services.AddScoped<IProfileService, ProfileService>();
