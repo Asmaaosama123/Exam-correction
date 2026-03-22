@@ -341,7 +341,7 @@ public class ExamService : IExamService
                     // Draw Name Mark
                     if (nameMarkPositions.TryGetValue(i, out var nm))
                     {
-                        canvas.Rectangle(nm.x, nm.y, 120, 15);
+                        canvas.Rectangle(nm.x, nm.y, 60, 20);
                     }
 
                     // Draw Fiducials
@@ -349,7 +349,7 @@ public class ExamService : IExamService
                     {
                         foreach (var f in fList)
                         {
-                            canvas.Rectangle(f.x, f.y, 20, 20);
+                            canvas.Rectangle(f.x, f.y, 30, 30);
                         }
                     }
                     canvas.Fill();
