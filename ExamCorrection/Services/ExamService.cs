@@ -356,8 +356,7 @@ public class ExamService : IExamService
                         var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
                         canvas.Rectangle(point.X, point.Y, 60, 20);
                     }
-                    }
-
+                    
                     // Draw Fiducials
                     if (fiducialsPositions.TryGetValue(i, out var fList))
                     {
@@ -400,7 +399,7 @@ public class ExamService : IExamService
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
                         .SetFontSize(14)
-                        .SetFixedPosition(i, actualBarcodeX, actualBarcodeY + 50, 500);
+                        .SetFixedPosition(i, barcodePoint.X, barcodePoint.Y + 50, 500);
                     doc.Add(namePara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });
