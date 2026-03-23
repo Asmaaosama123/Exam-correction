@@ -165,5 +165,6 @@ namespace ExamCorrection.Services
     {
         public string QuestionId { get; set; } = string.Empty;
         public bool IsCorrect { get; set; }
+        public string? SelectedAnswer { get; set; }
     }
 }
