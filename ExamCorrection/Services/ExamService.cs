@@ -337,17 +337,25 @@ public class ExamService : IExamService
                 {
                     var page = pdf.GetPage(i);
                     var cropBox = page.GetCropBox();
-                    var pageSize = cropBox; // Use CropBox as the reference frame
+                    var rotation = page.GetRotation();
+                    var pageSizeWithRotation = page.GetPageSizeWithRotation();
+                    float visualWidth = pageSizeWithRotation.GetWidth();
+                    float visualHeight = pageSizeWithRotation.GetHeight();
+                    
                     var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(page);
                     canvas.SetFillColor(iText.Kernel.Colors.ColorConstants.BLACK);
 
                     // Draw Name Mark
                     if (nameMarkPositions.TryGetValue(i, out var nm))
                     {
-                        // nm.x, nm.y are percentages (0-1) from top-left of the CropBox
-                        float actualX = (float)(cropBox.GetLeft() + (nm.x * cropBox.GetWidth()));
-                        float actualY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (nm.y * cropBox.GetHeight()) - 20)); // 20 is name mark height
-                        canvas.Rectangle(actualX, actualY, 60, 20); // Matches NAME_MARK_WIDTH/HEIGHT
+                        // nm.x, nm.y are percentages (0-1) from top-left of the VISUAL page
+                        float visualX = (float)(nm.x * visualWidth);
+                        float visualY = (float)(visualHeight - (nm.y * visualHeight) - 20); // 20 is height
+                        
+                        // Map visual coordinates to PDF page coordinates
+                        var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
+                        canvas.Rectangle(point.X, point.Y, 60, 20);
+                    }
                     }
 
                     // Draw Fiducials
@@ -356,9 +364,11 @@ public class ExamService : IExamService
                         foreach (var f in fList)
                         {
                             // f.x, f.y are percentages (0-1) from top-left
-                            float actualX = (float)(cropBox.GetLeft() + (f.x * cropBox.GetWidth()));
-                            float actualY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (f.y * cropBox.GetHeight()) - 30)); // 30 is fiducial height
-                            canvas.Rectangle(actualX, actualY, 30, 30); // Matches FIDUCIAL_SIZE
+                            float visualX = (float)(f.x * visualWidth);
+                            float visualY = (float)(visualHeight - (f.y * visualHeight) - 30); // 30 is size
+                            
+                            var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
+                            canvas.Rectangle(point.X, point.Y, 30, 30);
                         }
                     }
                     canvas.Fill();
@@ -372,8 +382,10 @@ public class ExamService : IExamService
                         pageYPercent = pageInfo.Y;
                     }
 
-                    float actualBarcodeX = (float)(cropBox.GetLeft() + (pageXPercent * cropBox.GetWidth()));
-                    float actualBarcodeY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (pageYPercent * cropBox.GetHeight()) - 60)); // 60 is barcode height (matched with frontend)
+                    float visualBarcodeX = (float)(pageXPercent * visualWidth);
+                    float visualBarcodeY = (float)(visualHeight - (pageYPercent * visualHeight) - 60); // 60 is height
+                    
+                    var barcodePoint = MapVisualToPage(visualBarcodeX, visualBarcodeY, visualWidth, visualHeight, rotation, cropBox);
 
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
@@ -382,7 +394,7 @@ public class ExamService : IExamService
                     barcode.SetX(1.5f);
 
                     var img = new Image(barcode.CreateFormXObject(pdf))
-                        .SetFixedPosition(i, actualBarcodeX, actualBarcodeY);
+                        .SetFixedPosition(i, barcodePoint.X, barcodePoint.Y);
                     doc.Add(img);
 
                     var namePara = new Paragraph(fixedName)
@@ -531,6 +543,38 @@ public class ExamService : IExamService
             teacherExam.QuestionsJson
         ));
     }
+
+    private Point MapVisualToPage(float visualX, float visualY, float visualWidth, float visualHeight, int rotation, iText.Kernel.Geom.Rectangle cropBox)
+    {
+        float x = 0;
+        float y = 0;
+
+        // rotation is in degrees (0, 90, 180, 270)
+        switch (rotation)
+        {
+            case 90:
+                x = visualY;
+                y = visualWidth - visualX;
+                break;
+            case 180:
+                x = visualWidth - visualX;
+                y = visualHeight - visualY;
+                break;
+            case 270:
+                x = visualHeight - visualY;
+                y = visualX;
+                break;
+            default: // 0
+                x = visualX;
+                y = visualY;
+                break;
+        }
+
+        // Add back the CropBox offset
+        return new Point(cropBox.GetLeft() + x, cropBox.GetBottom() + y);
+    }
+
+    private record Point(float X, float Y);
 }
 
 public record BarcodePageInfo(int Page, double X, double Y);
