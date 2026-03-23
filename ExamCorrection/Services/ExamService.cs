@@ -363,11 +363,12 @@ public class ExamService : IExamService
                         foreach (var f in fList)
                         {
                             // f.x, f.y are percentages (0-1) from top-left
+                            float fSize = 14.0f; // Fixed size for absolute symmetry
                             float visualX = (float)(f.x * visualWidth);
-                            float visualY = (float)(visualHeight - (f.y * visualHeight) - 30); // 30 is size
+                            float visualY = (float)(visualHeight - (f.y * visualHeight) - fSize);
                             
                             var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
-                            canvas.Rectangle(point.X, point.Y, 30, 30);
+                            canvas.Rectangle(point.X, point.Y, fSize, fSize);
                         }
                     }
                     canvas.Fill();
