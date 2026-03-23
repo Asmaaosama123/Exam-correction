@@ -327,6 +327,7 @@ public class ExamService : IExamService
                 }
 
                 var doc = new Document(pdf);
+                doc.SetMargins(0, 0, 0, 0); // Remove any default margins
                 var font = PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
                 
                 // Use our manual shaper since we don't have pdfCalligraph license
@@ -342,38 +343,82 @@ public class ExamService : IExamService
                     float visualWidth = pageSizeWithRotation.GetWidth();
                     float visualHeight = pageSizeWithRotation.GetHeight();
                     
-                    var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(page);
-                    canvas.SetFillColor(iText.Kernel.Colors.ColorConstants.BLACK);
-
-                    // Draw Name Mark
+                    // Draw Name Mark using rotation-aware Div
                     if (nameMarkPositions.TryGetValue(i, out var nm))
                     {
-                        // nm.x, nm.y are percentages (0-1) from top-left of the VISUAL page
                         float visualX = (float)(nm.x * visualWidth);
-                        float visualY = (float)(visualHeight - (nm.y * visualHeight) - 20); // 20 is height
+                        float visualY = (float)(visualHeight - (nm.y * visualHeight) - 20);
                         
-                        // Map visual coordinates to PDF page coordinates
-                        var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
-                        canvas.Rectangle(point.X, point.Y, 60, 20);
+                        // Clamp to prevent clipping
+                        if (visualX < 0) visualX = 0;
+                        if (visualX + 80 > visualWidth) visualX = visualWidth - 80;
+                        if (visualY < 0) visualY = 0;
+                        if (visualY + 20 > visualHeight) visualY = visualHeight - 20;
+
+                        var nmDiv = new Div()
+                            .SetBackgroundColor(iText.Kernel.Colors.ColorConstants.BLACK)
+                            .SetFixedPosition(i, visualX, visualY, 80); // 80 as requested
+                        nmDiv.SetHeight(20);
+                        doc.Add(nmDiv);
                     }
                     
-                    // Draw Fiducials
+                    // Draw Fiducials using PdfCanvas
                     if (fiducialsPositions.TryGetValue(i, out var fList))
                     {
+                        var pdfCanvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
+                        pdfCanvas.SetFillColor(iText.Kernel.Colors.ColorConstants.BLACK);
+                        
+                        // هنجيب أبعاد الصفحة الحقيقية والمساحة المرئية (CropBox)
+                        var box = page.GetCropBox();
+                        float pWidth = box.GetWidth();
+                        float pHeight = box.GetHeight();
+
+                        // الحجم الموحد للمربعات (بالنقاط - Points)
+                        // Calculate size relative to page width (approx 3.4% of page width matches ~20pt on A4)
+                        float fSize = (20f / 595f) * pWidth; 
+                        
                         foreach (var f in fList)
                         {
-                            // f.x, f.y are percentages (0-1) from top-left
-                            float fSize = 14.0f; // Fixed size for absolute symmetry
-                            float visualX = (float)(f.x * visualWidth);
-                            float visualY = (float)(visualHeight - (f.y * visualHeight) - fSize);
-                            
-                            var point = MapVisualToPage(visualX, visualY, visualWidth, visualHeight, rotation, cropBox);
-                            canvas.Rectangle(point.X, point.Y, fSize, fSize);
+                            // 1. تحويل النسب المئوية لأحداثيات فعلية بناءً على العرض والارتفاع المرئي
+                            float targetX = (float)(f.x * pWidth);
+                            float targetY = (float)(f.y * pHeight);
+
+                            float finalX, finalY;
+
+                            // 2. التعامل مع الدوران (Rotation) بحسابات دقيقة
+                            switch (rotation)
+                            {
+                                case 90:
+                                    finalX = box.GetLeft() + targetY;
+                                    finalY = box.GetBottom() + targetX;
+                                    break;
+                                case 180:
+                                    finalX = box.GetLeft() + pWidth - targetX - fSize;
+                                    finalY = box.GetBottom() + targetY;
+                                    break;
+                                case 270:
+                                    finalX = box.GetLeft() + pWidth - targetY - fSize;
+                                    finalY = box.GetBottom() + pHeight - targetX - fSize;
+                                    break;
+                                default: // 0
+                                    finalX = box.GetLeft() + targetX;
+                                    finalY = box.GetBottom() + pHeight - targetY - fSize;
+                                    break;
+                            }
+
+                            // 🚨 إضافة نظام الـ Clamping لضمان عدم خروج المربع عن حدود الصفحة نهائياً
+                            if (finalX < box.GetLeft()) finalX = box.GetLeft();
+                            if (finalX + fSize > box.GetLeft() + pWidth) finalX = box.GetLeft() + pWidth - fSize;
+                            if (finalY < box.GetBottom()) finalY = box.GetBottom();
+                            if (finalY + fSize > box.GetBottom() + pHeight) finalY = box.GetBottom() + pHeight - fSize;
+
+                            // رسم المربع (Rectangle بياخد x, y, width, height)
+                            pdfCanvas.Rectangle(finalX, finalY, fSize, fSize);
                         }
+                        pdfCanvas.Fill();
                     }
-                    canvas.Fill();
-                    
-                    double pageXPercent = x; // Default percentages
+
+                    double pageXPercent = x;
                     double pageYPercent = y;
 
                     if (examPages.TryGetValue(i, out var pageInfo))
@@ -383,25 +428,37 @@ public class ExamService : IExamService
                     }
 
                     float visualBarcodeX = (float)(pageXPercent * visualWidth);
-                    float visualBarcodeY = (float)(visualHeight - (pageYPercent * visualHeight) - 60); // 60 is height
+                    float visualBarcodeY = (float)(visualHeight - (pageYPercent * visualHeight) - 42); // 42 is height
                     
-                    var barcodePoint = MapVisualToPage(visualBarcodeX, visualBarcodeY, visualWidth, visualHeight, rotation, cropBox);
-
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
                     barcode.SetCode(barcodeValue);
-                    barcode.SetBarHeight(60f); // Matched with frontend BARCODE_HEIGHT
+                    barcode.SetBarHeight(42f); // Enlarged to 42f as requested
+                    barcode.SetFont(null); 
                     barcode.SetX(1.5f);
 
-                    var img = new Image(barcode.CreateFormXObject(pdf))
-                        .SetFixedPosition(i, barcodePoint.X, barcodePoint.Y);
+                    var barcodeForm = barcode.CreateFormXObject(pdf);
+                    float bcWidth = barcodeForm.GetWidth();
+
+                    var img = new Image(barcodeForm)
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY);
                     doc.Add(img);
 
+                    // Student Name (Right above the 42f bars)
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
                         .SetFontSize(14)
-                        .SetFixedPosition(i, barcodePoint.X, barcodePoint.Y + 50, 500);
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY + 42, bcWidth); 
                     doc.Add(namePara);
+
+                    // ID Numbers (Centered below the barcode)
+                    var idPara = new Paragraph(barcodeValue)
+                        .SetFont(font)
+                        .SetFontSize(10)
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY - 13, bcWidth);
+                    doc.Add(idPara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });
                 }

@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Entities;
+namespace ExamCorrection.Entities;
 
 public class StudentExamPaper
 {
