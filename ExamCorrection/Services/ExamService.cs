@@ -335,13 +335,18 @@ public class ExamService : IExamService
                 int totalPages = pdf.GetNumberOfPages();
                 for (int i = 1; i <= totalPages; i++)
                 {
-                    var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(pdf.GetPage(i));
+                    var page = pdf.GetPage(i);
+                    var pageSize = page.GetPageSize();
+                    var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(page);
                     canvas.SetFillColor(iText.Kernel.Colors.ColorConstants.BLACK);
 
                     // Draw Name Mark
                     if (nameMarkPositions.TryGetValue(i, out var nm))
                     {
-                        canvas.Rectangle(nm.x, nm.y, 60, 20);
+                        // nm.x, nm.y are percentages (0-1) from top-left
+                        float actualX = (float)(nm.x * pageSize.GetWidth());
+                        float actualY = (float)(pageSize.GetHeight() - (nm.y * pageSize.GetHeight()) - 20); // 20 is name mark height
+                        canvas.Rectangle(actualX, actualY, 60, 20);
                     }
 
                     // Draw Fiducials
@@ -349,18 +354,25 @@ public class ExamService : IExamService
                     {
                         foreach (var f in fList)
                         {
-                            canvas.Rectangle(f.x, f.y, 30, 30);
+                            // f.x, f.y are percentages (0-1) from top-left
+                            float actualX = (float)(f.x * pageSize.GetWidth());
+                            float actualY = (float)(pageSize.GetHeight() - (f.y * pageSize.GetHeight()) - 30); // 30 is fiducial height
+                            canvas.Rectangle(actualX, actualY, 30, 30);
                         }
                     }
                     canvas.Fill();
-                    double pageX = x;
-                    double pageY = y;
+                    
+                    double pageXPercent = x; // Default percentages
+                    double pageYPercent = y;
 
                     if (examPages.TryGetValue(i, out var pageInfo))
                     {
-                        pageX = pageInfo.X;
-                        pageY = pageInfo.Y;
+                        pageXPercent = pageInfo.X;
+                        pageYPercent = pageInfo.Y;
                     }
+
+                    float actualBarcodeX = (float)(pageXPercent * pageSize.GetWidth());
+                    float actualBarcodeY = (float)(pageSize.GetHeight() - (pageYPercent * pageSize.GetHeight()) - 40); // 40 is barcode height
 
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
@@ -369,13 +381,13 @@ public class ExamService : IExamService
                     barcode.SetX(1.5f);
 
                     var img = new Image(barcode.CreateFormXObject(pdf))
-                        .SetFixedPosition(i, (float)pageX, (float)pageY);
+                        .SetFixedPosition(i, actualBarcodeX, actualBarcodeY);
                     doc.Add(img);
 
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
                         .SetFontSize(14)
-                        .SetFixedPosition(i, (float)pageX, (float)pageY + 50, 500);
+                        .SetFixedPosition(i, actualBarcodeX, actualBarcodeY + 50, 500);
                     doc.Add(namePara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });

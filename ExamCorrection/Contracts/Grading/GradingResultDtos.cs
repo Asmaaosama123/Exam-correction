@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace ExamCorrection.Contracts.Grading
 {
@@ -45,7 +45,13 @@ namespace ExamCorrection.Contracts.Grading
         public string Method { get; set; } = string.Empty;
 
         [JsonPropertyName("points")]
-        public float Points { get; set; } // ✅ الجديد
+        public float Points { get; set; } 
+
+        [JsonPropertyName("options")]
+        public List<string> Options { get; set; } = new();
+
+        [JsonPropertyName("question_type")]
+        public string? QuestionType { get; set; }
     }
 
     public class GradingResultsResponse
