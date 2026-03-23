@@ -336,17 +336,18 @@ public class ExamService : IExamService
                 for (int i = 1; i <= totalPages; i++)
                 {
                     var page = pdf.GetPage(i);
-                    var pageSize = page.GetPageSize();
+                    var cropBox = page.GetCropBox();
+                    var pageSize = cropBox; // Use CropBox as the reference frame
                     var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(page);
                     canvas.SetFillColor(iText.Kernel.Colors.ColorConstants.BLACK);
 
                     // Draw Name Mark
                     if (nameMarkPositions.TryGetValue(i, out var nm))
                     {
-                        // nm.x, nm.y are percentages (0-1) from top-left
-                        float actualX = (float)(nm.x * pageSize.GetWidth());
-                        float actualY = (float)(pageSize.GetHeight() - (nm.y * pageSize.GetHeight()) - 20); // 20 is name mark height
-                        canvas.Rectangle(actualX, actualY, 60, 20);
+                        // nm.x, nm.y are percentages (0-1) from top-left of the CropBox
+                        float actualX = (float)(cropBox.GetLeft() + (nm.x * cropBox.GetWidth()));
+                        float actualY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (nm.y * cropBox.GetHeight()) - 20)); // 20 is name mark height
+                        canvas.Rectangle(actualX, actualY, 60, 20); // Matches NAME_MARK_WIDTH/HEIGHT
                     }
 
                     // Draw Fiducials
@@ -355,9 +356,9 @@ public class ExamService : IExamService
                         foreach (var f in fList)
                         {
                             // f.x, f.y are percentages (0-1) from top-left
-                            float actualX = (float)(f.x * pageSize.GetWidth());
-                            float actualY = (float)(pageSize.GetHeight() - (f.y * pageSize.GetHeight()) - 30); // 30 is fiducial height
-                            canvas.Rectangle(actualX, actualY, 30, 30);
+                            float actualX = (float)(cropBox.GetLeft() + (f.x * cropBox.GetWidth()));
+                            float actualY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (f.y * cropBox.GetHeight()) - 30)); // 30 is fiducial height
+                            canvas.Rectangle(actualX, actualY, 30, 30); // Matches FIDUCIAL_SIZE
                         }
                     }
                     canvas.Fill();
@@ -371,13 +372,13 @@ public class ExamService : IExamService
                         pageYPercent = pageInfo.Y;
                     }
 
-                    float actualBarcodeX = (float)(pageXPercent * pageSize.GetWidth());
-                    float actualBarcodeY = (float)(pageSize.GetHeight() - (pageYPercent * pageSize.GetHeight()) - 40); // 40 is barcode height
+                    float actualBarcodeX = (float)(cropBox.GetLeft() + (pageXPercent * cropBox.GetWidth()));
+                    float actualBarcodeY = (float)(cropBox.GetBottom() + (cropBox.GetHeight() - (pageYPercent * cropBox.GetHeight()) - 60)); // 60 is barcode height (matched with frontend)
 
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
                     barcode.SetCode(barcodeValue);
-                    barcode.SetBarHeight(40f);
+                    barcode.SetBarHeight(60f); // Matched with frontend BARCODE_HEIGHT
                     barcode.SetX(1.5f);
 
                     var img = new Image(barcode.CreateFormXObject(pdf))
