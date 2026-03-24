@@ -82,7 +82,11 @@ namespace ExamCorrection.Services
                                 if (teacherQ.ValueKind != JsonValueKind.Undefined)
                                 {
                                     if (teacherQ.TryGetProperty("type", out var typeProp))
-                                        qDto.Type = typeProp.GetString() ?? qDto.Type;
+                                    {
+                                        var typeValue = typeProp.GetString();
+                                        qDto.Type = typeValue ?? qDto.Type;
+                                        qDto.QuestionType = typeValue ?? qDto.QuestionType;
+                                    }
                                     
                                     if (teacherQ.TryGetProperty("rois", out var roisProp))
                                     {

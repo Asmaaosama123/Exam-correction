@@ -1,6 +1,7 @@
-﻿
+
 using Microsoft.AspNetCore.Server.Kestrel.Core; // أضف هذا السطر في أعلى Program.cs
 using ExamCorrection;
+using ExamCorrection.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,9 @@ app.UseSwaggerUI(c =>
 //app.UseHttpsRedirection();
 
 app.UseCors("myPolicy");
+
+// Add global error logging
+app.UseMiddleware<ErrorLoggingMiddleware>();
 
 app.UseStaticFiles(); // Default wwwroot
 

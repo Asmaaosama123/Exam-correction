@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TeacherExam> TeacherExams { get; set; } = null!;
     public DbSet<ExamGoal> ExamGoals { get; set; } = null!;
     public DbSet<Complaint> Complaints { get; set; } = null!;
+    public DbSet<SystemErrorLog> SystemErrorLogs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -60,6 +61,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(c => c.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<SystemErrorLog>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(c => c.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<ExamPage>()
             .HasQueryFilter(p => _userContext.IsAdmin || (p.Exam.OwnerId  == _userContext.UserId));
 
@@ -91,6 +98,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             if (entry.Entity is Complaint cmp && string.IsNullOrEmpty(cmp.OwnerId))
                 cmp.OwnerId = _userContext.UserId!;
+
+            if (entry.Entity is SystemErrorLog log && string.IsNullOrEmpty(log.OwnerId))
+                log.OwnerId = _userContext.UserId!;
         }
 
         return await base.SaveChangesAsync(cancellationToken);
