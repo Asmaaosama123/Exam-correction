@@ -58,8 +58,8 @@ public class ExamAiService(
             var mcqData = await mcqResponse.Content.ReadFromJsonAsync<McqResponse>();
             if (mcqData == null) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
-            // 5️⃣ Build Teacher's Points Map (The Source of Truth)
-            var questionPointsMap = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            // 5️⃣ Build Teacher's Data Map (Source of Truth)
+            var questionDataMap = new Dictionary<string, (float Points, List<string>? Options, string? Type)>(StringComparer.OrdinalIgnoreCase);
             float totalExamPointsByTeacher = 0;
 
             using (var doc = JsonDocument.Parse(teacherExam.QuestionsJson)) {
@@ -71,8 +71,19 @@ public class ExamAiService(
                             pts = ptsProp.ValueKind == JsonValueKind.Number ? (float)ptsProp.GetDouble() : 
                                   float.TryParse(ptsProp.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : 1.0f;
                         }
+                        
+                        List<string>? options = null;
+                        if (q.TryGetProperty("rois", out var roisProp) && roisProp.ValueKind == JsonValueKind.Object) {
+                            options = roisProp.EnumerateObject().Select(p => p.Name).ToList();
+                        }
+
+                        string? type = null;
+                        if (q.TryGetProperty("type", out var typeProp)) {
+                            type = typeProp.GetString();
+                        }
+
                         string normId = qId.Trim().ToLower().TrimStart('q', '0');
-                        questionPointsMap[normId] = pts;
+                        questionDataMap[normId] = (pts, options, type);
                         totalExamPointsByTeacher += pts;
                     }
                 }
@@ -98,15 +109,18 @@ public class ExamAiService(
 
                 foreach (var detail in res.Details.Details)
                 {
-                    // الحتة دي هي اللي بتضمن إننا نرجع لدرجة المعلم
+                    // الحتة دي هي اللي بتضمن إننا نرجع لدرجة المعلم ونبص على الاختيارات
                     string detailId = detail.Id?.Trim().ToLower().TrimStart('q', '0') ?? "";
                     
-                    // لو الطالب مجاوب صح (IsCorrect)، بنديله الدرجة اللي المعلم حاططها في الـ Map
-                    if (questionPointsMap.TryGetValue(detailId, out float teacherPts)) {
-                        if (detail.IsCorrect) recalculatedStudentScore += teacherPts;
-                        enrichedDetails.Add(detail with { Points = teacherPts }); // بنحدث الـ Points اللي هتتعرض في الـ UI
+                    if (questionDataMap.TryGetValue(detailId, out var qData)) {
+                        if (detail.IsCorrect) recalculatedStudentScore += qData.Points;
+                        enrichedDetails.Add(detail with { 
+                            Points = qData.Points, 
+                            Options = qData.Options,
+                            QuestionType = qData.Type,
+                            Type = qData.Type ?? detail.Type
+                        });
                     } else {
-                        // لو معرفناش نوصل للسؤال بنسيبها 1 كاحتياطي بس بنسجل ده
                         if (detail.IsCorrect) recalculatedStudentScore += 1.0f;
                         enrichedDetails.Add(detail with { Points = 1.0f });
                     }

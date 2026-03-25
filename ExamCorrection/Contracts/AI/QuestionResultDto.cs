@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace ExamCorrection.Contracts.AI;
 
@@ -25,5 +25,11 @@ public record QuestionResultDto(
     string Method,
 
     [property: JsonPropertyName("points")]
-    float Points // ✅ الجديد
+    float Points,
+
+    [property: JsonPropertyName("options")]
+    List<string>? Options = null,
+
+    [property: JsonPropertyName("question_type")]
+    string? QuestionType = null
 );

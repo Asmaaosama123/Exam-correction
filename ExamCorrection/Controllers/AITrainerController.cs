@@ -22,7 +22,7 @@ public class AITrainerController(IWebHostEnvironment webHostEnvironment) : Contr
             return Ok(new List<DatasetFileDto>());
         }
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/AI-Dataset/";
+        var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/AITrainer/file/";
         var files = Directory.GetFiles(datasetFolder);
         
         var fileList = new List<DatasetFileDto>();
@@ -85,5 +85,35 @@ public class AITrainerController(IWebHostEnvironment webHostEnvironment) : Contr
 
         memoryStream.Position = 0;
         return File(memoryStream, "application/zip", $"AI_Dataset_Selected_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+    }
+
+    [HttpGet("file/{fileName}")]
+    public IActionResult GetFile(string fileName)
+    {
+        // Prevent directory traversal
+        if (string.IsNullOrEmpty(fileName) || fileName.Contains("..") || fileName.Contains("/") || fileName.Contains("\\"))
+        {
+            return BadRequest("Invalid file name.");
+        }
+
+        var datasetFolder = Path.Combine(_webHostEnvironment.WebRootPath, "AI-Dataset");
+        var filePath = Path.Combine(datasetFolder, fileName);
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            return NotFound();
+        }
+
+        var extension = Path.GetExtension(filePath).ToLower();
+        var contentType = extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream"
+        };
+
+        return PhysicalFile(filePath, contentType);
     }
 }
