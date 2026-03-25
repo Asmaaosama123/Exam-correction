@@ -428,12 +428,12 @@ public class ExamService : IExamService
                     }
 
                     float visualBarcodeX = (float)(pageXPercent * visualWidth);
-                    float visualBarcodeY = (float)(visualHeight - (pageYPercent * visualHeight) - 42); // 42 is height
+                    float visualBarcodeY = (float)(visualHeight - (pageYPercent * visualHeight) - 38); // Reduced to 38f (two degrees smaller)
                     
                     var barcodeValue = $"{exam.Id}-{student.Id}-{i}";
                     var barcode = new Barcode128(pdf);
                     barcode.SetCode(barcodeValue);
-                    barcode.SetBarHeight(42f); // Enlarged to 42f as requested
+                    barcode.SetBarHeight(38f); // Reduced to 38f as requested
                     barcode.SetFont(null); 
                     barcode.SetX(1.5f);
 
@@ -444,20 +444,20 @@ public class ExamService : IExamService
                         .SetFixedPosition(i, visualBarcodeX, visualBarcodeY);
                     doc.Add(img);
 
-                    // Student Name (Right above the 42f bars)
+                    // Student Name (Right above the 38f bars)
                     var namePara = new Paragraph(fixedName)
                         .SetFont(font)
-                        .SetFontSize(14)
+                        .SetFontSize(12) // Slightly smaller for consistency (from 14)
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY + 42, bcWidth); 
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY + 38, bcWidth); 
                     doc.Add(namePara);
 
                     // ID Numbers (Centered below the barcode)
                     var idPara = new Paragraph(barcodeValue)
                         .SetFont(font)
-                        .SetFontSize(10)
+                        .SetFontSize(9) // Slightly smaller for consistency (from 10)
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY - 13, bcWidth);
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY - 12, bcWidth);
                     doc.Add(idPara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });
@@ -483,6 +483,31 @@ public class ExamService : IExamService
 
     public async Task<Result<List<ExamCorrectionResponse>>> UploadAndSaveExamAnswersAsync(IFormFile file, CancellationToken cancellationToken)
     {
+        // Save a copy to AI-Dataset for trainer/model training
+        try 
+        {
+            var datasetFolder = Path.Combine(_webHostEnvironment.WebRootPath, "AI-Dataset");
+            if (!Directory.Exists(datasetFolder))
+            {
+                Directory.CreateDirectory(datasetFolder);
+            }
+
+            // Create a unique filename: timestamp_originalName
+            var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+            var datasetFileName = $"{timestamp}_{file.FileName}";
+            var datasetPath = Path.Combine(datasetFolder, datasetFileName);
+
+            using (var streamCopy = new FileStream(datasetPath, FileMode.Create))
+            {
+                await file.CopyToAsync(streamCopy, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail the correction process if saving for AI fails
+            Console.WriteLine($"[ExamService] Failed to save file to AI-Dataset: {ex.Message}");
+        }
+
         using var stream = file.OpenReadStream();
         var streamPart = new StreamPart(stream, file.FileName, file.ContentType);
 

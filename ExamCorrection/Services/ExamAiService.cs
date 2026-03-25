@@ -9,14 +9,40 @@ namespace ExamCorrection.Services;
 public class ExamAiService(
     ApplicationDbContext _context,
     IHttpClientFactory httpClientFactory,
-    IConfiguration _configuration
+    IConfiguration _configuration,
+    Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment
 ) : IExamAiService
 {
     private readonly HttpClient _client = httpClientFactory.CreateClient("AI");
+    private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment = _webHostEnvironment;
     private string BaseUrl => _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:8000";
 
     public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file)
     {
+        // Save a copy to AI-Dataset for trainer/model training
+        try 
+        {
+            var datasetFolder = Path.Combine(_webHostEnvironment.WebRootPath, "AI-Dataset");
+            if (!Directory.Exists(datasetFolder))
+            {
+                Directory.CreateDirectory(datasetFolder);
+            }
+
+            // Create a unique filename: timestamp_originalName
+            var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+            var datasetFileName = $"{timestamp}_{file.FileName}";
+            var datasetPath = Path.Combine(datasetFolder, datasetFileName);
+
+            using (var streamCopy = new FileStream(datasetPath, FileMode.Create))
+            {
+                await file.CopyToAsync(streamCopy);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ExamAiService] Failed to save file to AI-Dataset: {ex.Message}");
+        }
+
         try
         {
             if (file == null) return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);

@@ -12,7 +12,10 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ExamCorrection.Filters.BusinessErrorLoggingFilter>();
+});
 builder.Services.AddDependecies(builder.Configuration);
 
 var app = builder.Build();
