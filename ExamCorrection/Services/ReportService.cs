@@ -509,7 +509,7 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                         // Add some space between the two students on the same page (Admin only case)
                         document.Add(new iText.Layout.Element.Paragraph("\n")
                             .SetPadding(0).SetMargin(0).SetFontSize(10));
-                        document.Add(new iText.Layout.Element.LineSeparator(new iText.Layout.Borders.SolidBorder(0.5f))
+                        document.Add(new iText.Layout.Element.LineSeparator(new iText.Kernel.Pdf.Canvas.Draw.SolidLine(0.5f))
                             .SetMarginTop(10).SetMarginBottom(10));
                     }
                 }
