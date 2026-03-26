@@ -46,4 +46,11 @@ public class AdminController(IAdminService adminService) : ControllerBase
         var result = await _adminService.DeleteUserAsync(userId, cancellationToken);
         return result.IsSuccess ? Ok() : result.ToProblem();
     }
+
+    [HttpGet("users/{userId}/exams")]
+    public async Task<IActionResult> GetTeacherExams([FromRoute] string userId, CancellationToken cancellationToken)
+    {
+        var result = await _adminService.GetTeacherExamsAsync(userId, cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
+    }
 }

@@ -10,4 +10,5 @@ public interface IAdminService
     Task<Result<UserDto>> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default);
     Task<Result<UserDto>> UpdateUserAsync(string userId, UpdateUserRequest request, CancellationToken cancellationToken = default);
     Task<Result> DeleteUserAsync(string userId, CancellationToken cancellationToken = default);
+    Task<Result<IEnumerable<TeacherExamSummaryDto>>> GetTeacherExamsAsync(string teacherId, CancellationToken cancellationToken = default);
 }

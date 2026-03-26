@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Contracts.Reports;
+using ExamCorrection.Contracts.Reports;
 
 namespace ExamCorrection.Services;
 
@@ -11,5 +11,5 @@ public interface IReportService
     Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId);
     Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId);
     Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null);
-    
+    Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersZipAsync(int[] examIds, string? teacherId = null);
 }

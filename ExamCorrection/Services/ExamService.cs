@@ -438,10 +438,11 @@ public class ExamService : IExamService
                     barcode.SetX(1.5f);
 
                     var barcodeForm = barcode.CreateFormXObject(pdf);
-                    float bcWidth = barcodeForm.GetWidth();
+
 
                     var img = new Image(barcodeForm)
-                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY);
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY)
+                        .SetWidth(140f); // Fix width to 140 points so it doesn't grow
                     doc.Add(img);
 
                     // Student Name (Right above the 38f bars)
@@ -449,7 +450,7 @@ public class ExamService : IExamService
                         .SetFont(font)
                         .SetFontSize(12) // Slightly smaller for consistency (from 14)
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY + 38, bcWidth); 
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY + 38, 140f); 
                     doc.Add(namePara);
 
                     // ID Numbers (Centered below the barcode)
@@ -457,7 +458,7 @@ public class ExamService : IExamService
                         .SetFont(font)
                         .SetFontSize(9) // Slightly smaller for consistency (from 10)
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY - 12, bcWidth);
+                        .SetFixedPosition(i, visualBarcodeX, visualBarcodeY - 12, 140f);
                     doc.Add(idPara);
 
                     studentPaper.Pages.Add(new StudentExamPage { PageNumber = i, BarcodeValue = barcodeValue });

@@ -103,4 +103,17 @@ public class ReportsController(IReportService reportService) : ControllerBase
 
         return File(fileContent, "application/pdf", fileName);
     }
+
+    [HttpGet("export-corrected-papers-zip")]
+    public async Task<IActionResult> ExportCorrectedPapersZip([FromQuery] int[] examIds, [FromQuery] string? teacherId = null)
+    {
+        var result = await _reportService.ExportCorrectedPapersZipAsync(examIds, teacherId);
+
+        if (!result.IsSuccess)
+            return BadRequest(result.Error);
+
+        var (fileContent, fileName) = result.Value;
+
+        return File(fileContent, "application/zip", fileName);
+    }
 }

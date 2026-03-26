@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ExamCorrection.Abstractions;
 
@@ -25,6 +25,6 @@ public static class ResultExtensions
 			}
 		};
 
-		return new ObjectResult(problemDetails);
+		return new ObjectResult(problemDetails) { StatusCode = result.Error.StatusCode };
 	}
 }

@@ -124,10 +124,6 @@ public class AdminService(
             return Result.Failure(new Error("Admin.UserNotFound", "User not found.", StatusCodes.Status404NotFound));
         }
 
-        // Instead of hard delete, maybe just disable them. The admin wants "Delete" (حذف).
-        // If we delete, it might violate FK constraints unless cascade is configured.
-        // I will do hard delete, if DbContext allows it, otherwise just disable.
-        // The user says "تعديل حذف إضافة دخول" (Edit, Delete, Add, Login).
         var result = await _userManager.DeleteAsync(user);
 
         if (!result.Succeeded)
@@ -136,5 +132,24 @@ public class AdminService(
         }
 
         return Result.Success();
+    }
+
+    public async Task<Result<IEnumerable<TeacherExamSummaryDto>>> GetTeacherExamsAsync(string teacherId, CancellationToken cancellationToken = default)
+    {
+        var summaries = await _dbContext.StudentExamPapers
+            .Include(p => p.Exam)
+            .Where(p => p.OwnerId == teacherId)
+            .GroupBy(p => new { p.ExamId, p.Exam.Title, p.Exam.Subject })
+            .Select(g => new TeacherExamSummaryDto(
+                g.Key.ExamId,
+                g.Key.Title,
+                g.Key.Subject,
+                g.Count(),
+                g.Max(p => p.GeneratedAt)
+            ))
+            .OrderByDescending(s => s.LastCorrectedAt)
+            .ToListAsync(cancellationToken);
+
+        return Result.Success<IEnumerable<TeacherExamSummaryDto>>(summaries);
     }
 }

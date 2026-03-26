@@ -15,7 +15,8 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
             objectResult.Value is ProblemDetails problem)
         {
             // Log 400-499 errors (Validation, Conflict, NotFound, etc. from Result.Failure)
-            if (objectResult.StatusCode >= 400 && objectResult.StatusCode < 500)
+            // Also log if StatusCode is null (meaning it wasn't explicitly set but is still a ProblemDetails)
+            if (objectResult.StatusCode == null || (objectResult.StatusCode >= 400 && objectResult.StatusCode < 500))
             {
                 var userId = context.HttpContext.User?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 

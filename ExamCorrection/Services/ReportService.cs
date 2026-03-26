@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 
 using ExamCorrection.Contracts.Reports;
 using Microsoft.AspNetCore.Components.Web;
@@ -420,104 +420,143 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(writer))
         {
             var document = new iText.Layout.Document(pdf, iText.Kernel.Geom.PageSize.A4);
-            document.SetMargins(20, 20, 20, 20);
+            document.SetMargins(30, 30, 30, 30);
 
             var fontPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "fonts", "arialbd.ttf");
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
-            foreach (var result in results)
-            {
-                // Attempt to load the image
-                string imageUrl = result.AnnotatedImageUrl!;
-                string localImagePath = "";
+            bool isAdmin = _userContext.IsAdmin;
+            int itemsPerPage = isAdmin ? 2 : 1;
+            float maxImageHeight = isAdmin ? 360 : 700;
 
-                if (imageUrl.StartsWith("http"))
+            for (int i = 0; i < results.Count; i++)
+            {
+                var result = results[i];
+                
+                // Add header info for student
+                var teacherName = result.User != null ? $"{result.User.FirstName} {result.User.LastName}" : "Unknown";
+                var teacherInfo = isAdmin ? $" | المعلم: {teacherName}" : "";
+                
+                var headerParagraph = new iText.Layout.Element.Paragraph()
+                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName}"))
+                        .SetFont(font).SetFontSize(11).SetBold())
+                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($" | الدرجة: {result.FinalScore} / {result.TotalQuestions}"))
+                        .SetFont(font).SetFontSize(11).SetBold())
+                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(teacherInfo))
+                        .SetFont(font).SetFontSize(9))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetMarginBottom(5);
+
+                document.Add(headerParagraph);
+
+                // Attempt to load and add the image
+                string imageUrl = result.AnnotatedImageUrl!;
+                try
                 {
-                    // For now, if it's a full remote URL, we might need an HTTP client. 
-                    // Let's assume the basic case where it's a relative path or we can fetch it.
-                    // To keep it simple and robust, we assume the AnnotatedImageUrl is a relative path 
-                    // or constructed from an upload folder if it's stored locally.
-                    // If it's a remote URL, we'd need to download it first.
-                    try
+                    byte[]? imageBytes = null;
+                    if (imageUrl.StartsWith("http"))
                     {
                         using var httpClient = new HttpClient();
-                        var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
-                        var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
-                        var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
-                        document.Add(image);
-                        
-                        var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
-                        // Add student name as footer or header
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
-                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
+                        imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Console.WriteLine($"Error fetching image {imageUrl}: {ex.Message}");
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"تعذر تحميل ورقة الطالب: {result.Student.FullName}"))
-                            .SetFont(font).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
-                    }
-                }
-                else
-                {
-                    bool imageAdded = false;
-                    // Resolve relative URL using AI Server BaseUrl if available
-                    var baseUrl = _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/');
-                    if (!string.IsNullOrEmpty(baseUrl))
-                    {
-                        var fullImageUrl = $"{baseUrl}/{imageUrl.TrimStart('/')}";
-                        try
+                        var baseUrl = _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/');
+                        if (!string.IsNullOrEmpty(baseUrl))
                         {
+                            var fullImageUrl = $"{baseUrl}/{imageUrl.TrimStart('/')}";
                             using var httpClient = new HttpClient();
-                            httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-                            var imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
-                            var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
-                            var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
-                            document.Add(image);
-                            
-                            var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
-                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
-                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
-                            
-                            imageAdded = true;
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error fetching relative image {fullImageUrl}: {ex.Message}");
-                        }
-                    }
-
-                    if (!imageAdded)
-                    {
-                        // Local path handling (as fallback or if no base URL)
-                        localImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
-                        if (File.Exists(localImagePath))
-                        {
-                            var imageData = iText.IO.Image.ImageDataFactory.Create(localImagePath);
-                            var image = new iText.Layout.Element.Image(imageData).SetAutoScale(true);
-                            document.Add(image);
-                            
-                            var teacherInfo = _userContext.IsAdmin && result.User != null ? $" - المعلم: {result.User.FirstName} {result.User.LastName}" : "";
-                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName} - الدرجة: {result.FinalScore}{teacherInfo}"))
-                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
+                            httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
+                            imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
                         }
                         else
                         {
-                            document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"لم يتم العثور على صورة ورقة الطالب: {result.Student.FullName}"))
-                                .SetFont(font).SetTextAlignment(TextAlignment.CENTER));
+                            var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
+                            if (File.Exists(localPath)) imageBytes = await File.ReadAllBytesAsync(localPath);
                         }
                     }
+
+                    if (imageBytes != null)
+                    {
+                        var imageData = iText.IO.Image.ImageDataFactory.Create(imageBytes);
+                        var image = new iText.Layout.Element.Image(imageData)
+                            .SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER)
+                            .SetMaxHeight(maxImageHeight)
+                            .SetAutoScale(true);
+                        document.Add(image);
+                    }
+                    else
+                    {
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تعذر العثور على صورة الورقة"))
+                            .SetFont(font).SetFontSize(10).SetItalic().SetTextAlignment(TextAlignment.CENTER));
+                    }
                 }
-                
-                // Add a page break between students, unless it's the last one
-                if (result != results.Last())
+                catch (Exception ex)
                 {
-                    document.Add(new iText.Layout.Element.AreaBreak(iText.Layout.Properties.AreaBreakType.NEXT_PAGE));
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"خطأ في تحميل الصورة: {ex.Message}"))
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(TextAlignment.CENTER));
+                }
+
+                // Separator or Page Break
+                if (i < results.Count - 1)
+                {
+                    if ((i + 1) % itemsPerPage == 0)
+                    {
+                        document.Add(new iText.Layout.Element.AreaBreak(iText.Layout.Properties.AreaBreakType.NEXT_PAGE));
+                    }
+                    else
+                    {
+                        // Add some space between the two students on the same page (Admin only case)
+                        document.Add(new iText.Layout.Element.Paragraph("\n")
+                            .SetPadding(0).SetMargin(0).SetFontSize(10));
+                        document.Add(new iText.Layout.Element.LineSeparator(new iText.Layout.Borders.SolidBorder(0.5f))
+                            .SetMarginTop(10).SetMarginBottom(10));
+                    }
                 }
             }
 
             document.Close();
         }
+
+        var className = results.FirstOrDefault()?.Student?.Class?.Name ?? "General";
+        var fileName = $"{exam.Title}_{className}_Corrected_{DateTime.Now:yyyyMMdd}.pdf";
+        fileName = fileName.Replace(' ', '_');
+        foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
+        
+        return Result.Success((ms.ToArray(), fileName));
+    }
+
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersZipAsync(int[] examIds, string? teacherId = null)
+    {
+        if (examIds == null || examIds.Length == 0)
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("NoExams", "يرجى اختيار اختبار واحد على الأقل.", StatusCodes.Status400BadRequest));
+
+        using var ms = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            foreach (var examId in examIds)
+            {
+                var pdfResult = await ExportCorrectedPapersPdfAsync(examId, teacherId);
+                if (pdfResult.IsSuccess)
+                {
+                    var entry = archive.CreateEntry(pdfResult.Value.FileName);
+                    using var entryStream = entry.Open();
+                    await entryStream.WriteAsync(pdfResult.Value.FileContent, 0, pdfResult.Value.FileContent.Length);
+                }
+            }
+        }
+
+        var teacherName = "Batch";
+        if (!string.IsNullOrEmpty(teacherId))
+        {
+            var teacher = await _context.Users.FindAsync(teacherId);
+            if (teacher != null) teacherName = $"{teacher.FirstName}_{teacher.LastName}";
+        }
+
+        var fileName = $"Corrected_Papers_{teacherName}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+        return Result.Success((ms.ToArray(), fileName));
+    }
+}
 
         var className = results.FirstOrDefault()?.Student?.Class?.Name ?? "General";
         var fileName = $"{exam.Title}_{className}_الاوراق_{DateTime.Now:yyyyMMdd}.pdf";
