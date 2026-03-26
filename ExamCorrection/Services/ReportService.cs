@@ -557,12 +557,3 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         return Result.Success((ms.ToArray(), fileName));
     }
 }
-
-        var className = results.FirstOrDefault()?.Student?.Class?.Name ?? "General";
-        var fileName = $"{exam.Title}_{className}_الاوراق_{DateTime.Now:yyyyMMdd}.pdf";
-        fileName = fileName.Replace(' ', '_');
-        foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
-        
-        return Result.Success((ms.ToArray(), fileName));
-    }
-}
