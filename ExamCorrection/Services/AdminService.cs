@@ -136,16 +136,16 @@ public class AdminService(
 
     public async Task<Result<IEnumerable<TeacherExamSummaryDto>>> GetTeacherExamsAsync(string teacherId, CancellationToken cancellationToken = default)
     {
-        var summaries = await _dbContext.StudentExamPapers
-            .Include(p => p.Exam)
-            .Where(p => p.OwnerId == teacherId)
-            .GroupBy(p => new { p.ExamId, p.Exam.Title, p.Exam.Subject })
-            .Select(g => new TeacherExamSummaryDto(
-                g.Key.ExamId,
-                g.Key.Title,
-                g.Key.Subject,
-                g.Count(),
-                g.Max(p => p.GeneratedAt)
+        var summaries = await _dbContext.Exams
+            .Where(e => _dbContext.StudentExamPapers.Any(p => p.ExamId == e.Id && p.OwnerId == teacherId))
+            .Select(e => new TeacherExamSummaryDto(
+                e.Id,
+                e.Title,
+                e.Subject,
+                _dbContext.StudentExamPapers.Count(p => p.ExamId == e.Id && p.OwnerId == teacherId),
+                _dbContext.StudentExamPapers
+                    .Where(p => p.ExamId == e.Id && p.OwnerId == teacherId)
+                    .Max(p => p.GeneratedAt)
             ))
             .OrderByDescending(s => s.LastCorrectedAt)
             .ToListAsync(cancellationToken);

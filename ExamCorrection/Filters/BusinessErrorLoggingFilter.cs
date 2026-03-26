@@ -20,25 +20,40 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
             {
                 var userId = context.HttpContext.User?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 
-                // Extract errors from ProblemDetails extensions (populated by ResultExtensions.ToProblem)
+                // 1. Extract custom Errors (from ResultExtensions)
                 if (problem.Extensions.TryGetValue("errors", out var errorsObj) && errorsObj is Array errors)
                 {
                     foreach (var err in errors)
                     {
                         if (err == null) continue;
-
-                        // Use reflection to get Code and Description since they are anonymous types in ResultExtensions
                         var type = err.GetType();
                         var code = type.GetProperty("Code")?.GetValue(err)?.ToString() ?? "UNKNOWN_CODE";
                         var description = type.GetProperty("Description")?.GetValue(err)?.ToString() ?? "No description provided";
                         
-                        await systemLogService.LogErrorAsync(
-                            code, 
-                            description, 
-                            "BUSINESS_LOGIC", 
-                            userId
-                        );
+                        await systemLogService.LogErrorAsync(description, $"Code: {code}", "BUSINESS_LOGIC", userId);
                     }
+                }
+                // 2. Extract standard Validation Errors (ModelState/ValidationProblemDetails)
+                else if (problem is ValidationProblemDetails validationProblem)
+                {
+                    foreach (var keyValuePair in validationProblem.Errors)
+                    {
+                        var field = keyValuePair.Key;
+                        foreach (var errorMessage in keyValuePair.Value)
+                        {
+                            await systemLogService.LogErrorAsync(
+                                $"خطأ في إدخال بيانات: {errorMessage}", 
+                                $"Field: {field}", 
+                                "VALIDATION_ERROR", 
+                                userId
+                            );
+                        }
+                    }
+                }
+                // 3. Fallback for other ProblemDetails
+                else if (!string.IsNullOrEmpty(problem.Title))
+                {
+                    await systemLogService.LogErrorAsync(problem.Title, problem.Detail ?? string.Empty, "BUSINESS_LOGIC", userId);
                 }
             }
         }

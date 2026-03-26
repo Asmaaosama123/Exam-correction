@@ -17,11 +17,11 @@ public class ErrorLoggingMiddleware(RequestDelegate next)
             // Log the exception into the database
             try
             {
-                var details = $"StackTrace: {ex.StackTrace}";
+                var details = $"Exception: {ex.Message}\nStackTrace: {ex.StackTrace}";
                 var source = $"BACKEND_EXCEPTION_{ex.GetType().Name}";
                 
                 await systemLogService.LogErrorAsync(
-                    ex.Message,
+                    "خطأ تقني غير متوقع في النظام",
                     details,
                     source,
                     context.User?.Identity?.IsAuthenticated == true ? context.User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value : null
