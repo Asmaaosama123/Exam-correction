@@ -62,8 +62,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             var subjectName = exam.Subject?.Trim() ?? "عام";
 
             // Modern Color Palette (matching frontend)
-            var primaryBlue = new iText.Kernel.Colors.DeviceRgb(17, 85, 204); 
-            var accentBlue = new iText.Kernel.Colors.DeviceRgb(59, 130, 246);
+            var primaryBlue = iText.Kernel.Colors.ColorConstants.BLACK; 
+            var accentBlue = iText.Kernel.Colors.ColorConstants.BLACK;
             var successGreen = new iText.Kernel.Colors.DeviceRgb(16, 185, 129);
             var dangerRed = new iText.Kernel.Colors.DeviceRgb(239, 68, 68);
             var warningOrange = new iText.Kernel.Colors.DeviceRgb(245, 158, 11);
@@ -104,9 +104,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(3).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
                     var p = new iText.Layout.Element.Paragraph().SetMargin(0).SetMultipliedLeading(1.0f);
                     
-                    // Shape label part only to avoid flipping numbers/dates
-                    string label = ArabicTextShaper.Shape($"{lbl}: ");
-                    p.Add(new iText.Layout.Element.Text(label + val).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
+                    // Shape full label and value to avoid flipping mixed text
+                    string fullText = ArabicTextShaper.Shape($"{lbl}: {val}");
+                    p.Add(new iText.Layout.Element.Text(fullText).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
                     
                     cell.Add(p);
                     subHeader.AddCell(cell);
@@ -160,7 +160,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     string label = ArabicTextShaper.Shape($"• {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     stCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT));
                 }
                 
                 // Add Class Strength Chart if available
@@ -168,7 +168,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     try {
                         byte[]? imageBytes = GetImageBytes(request.ClassStrengthRadarImageBase64);
                         if (imageBytes != null) {
-                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(275);
+                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.LEFT).SetWidth(275);
                             stCell.Add(img);
                         }
                     } catch {}
@@ -182,7 +182,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     string label = ArabicTextShaper.Shape($"• {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     wkCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT));
                 }
 
                 // Add Class Weakness Chart if available
@@ -190,7 +190,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     try {
                         byte[]? imageBytes = GetImageBytes(request.ClassWeaknessRadarImageBase64);
                         if (imageBytes != null) {
-                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(275);
+                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.LEFT).SetWidth(275);
                             wkCell.Add(img);
                         }
                     } catch {}
@@ -363,14 +363,14 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             string label = ArabicTextShaper.Shape($"• {g.GoalText}");
             string value = $"({g.SuccessRate:F0}%)";
             var p = new iText.Layout.Element.Paragraph(label + " " + value)
-                .SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMarginBottom(2).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+                .SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMarginBottom(2).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
             strongCell.Add(p);
         }
         if (!strongGoals.Any()) strongCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("لا توجد مهارات متقنة حالياً")).SetFont(font).SetFontSize(8).SetItalic().SetFontColor(darkGray));
 
         if (strengthChartBytes != null) {
             try {
-                strongCell.Add(new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(strengthChartBytes)).SetWidth(160).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginTop(3));
+                strongCell.Add(new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(strengthChartBytes)).SetWidth(160).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.LEFT).SetMarginTop(3));
             } catch {}
         }
         skillsGrid.AddCell(strongCell);
@@ -389,7 +389,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 string label = ArabicTextShaper.Shape($"• {g.GoalText}");
                 string value = $"({g.SuccessRate:F0}%)";
                 var p = new iText.Layout.Element.Paragraph(label + " " + value)
-                    .SetFont(font).SetFontSize(8.5f).SetFontColor(darkGray).SetMarginBottom(1).SetMultipliedLeading(1.0f).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+                    .SetFont(font).SetFontSize(8.5f).SetFontColor(darkGray).SetMarginBottom(1).SetMultipliedLeading(1.0f).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
                 weakCell.Add(p);
             }
         } else {
@@ -398,7 +398,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
         if (weaknessChartBytes != null) {
             try {
-                weakCell.Add(new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(weaknessChartBytes)).SetWidth(150).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginTop(2));
+                weakCell.Add(new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(weaknessChartBytes)).SetWidth(150).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.LEFT).SetMarginTop(2));
             } catch {}
         }
         skillsGrid.AddCell(weakCell);
@@ -1007,10 +1007,10 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Headers for Detailed History (Premium Styling) ---
                 var historyCols = new float[] { 1.2f, 1.5f, 3.3f };
-                var historyHeader = new iText.Layout.Element.Table(historyCols).UseAllAvailableWidth().SetMarginTop(8).SetMarginBottom(5).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+                var historyHeader = new iText.Layout.Element.Table(historyCols).UseAllAvailableWidth().SetMarginTop(8).SetMarginBottom(5).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT).SetMarginLeft(10).SetMarginRight(10);
                 Action<string, iText.Layout.Properties.TextAlignment> addHeader = (txt, align) => {
-                    var hCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(lightGrayBg).SetPadding(6).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(align);
-                    hCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(txt)).SetFont(font).SetFontSize(8).SetBold().SetFontColor(textSlate));
+                    var hCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(lightGrayBg).SetPadding(0).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(align);
+                    hCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(txt)).SetFont(font).SetFontSize(11).SetBold().SetFontColor(textSlate));
                     historyHeader.AddCell(hCell);
                 };
                 addHeader("الدرجة", iText.Layout.Properties.TextAlignment.LEFT);
@@ -1028,7 +1028,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     
                     // Score with Badge styling
                     string scoreValue = $"{examRec.Score}/{examRec.TotalScore} ({examRec.Percentage:F0}%)";
-                    var scoreP = new iText.Layout.Element.Paragraph(scoreValue).SetFont(font).SetFontSize(9).SetBold().SetFontColor(scoreClr).SetBackgroundColor(scoreBg).SetPaddingLeft(10).SetPaddingRight(10).SetPaddingTop(4).SetPaddingBottom(4).SetBorderRadius(new iText.Layout.Properties.BorderRadius(10));
+                    var scoreP = new iText.Layout.Element.Paragraph(scoreValue).SetFont(font).SetFontSize(9).SetBold().SetFontColor(scoreClr).SetPadding(0);
                     examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).Add(scoreP));
                     
                     examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(examRec.Date.ToString("yyyy-MM-dd")).SetFont(font).SetFontSize(8).SetFontColor(textSlate)));
