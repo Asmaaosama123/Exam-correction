@@ -721,6 +721,84 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         return await GenerateChartAsync(chartConfig);
     }
 
+    private async Task<byte[]?> GetSkillsEvolutionChartAsync(StudentProgressDto progress)
+    {
+        // Identify recurring goals (same logic as used for cards)
+        var recurringGoals = progress.ExamSummaries
+            .Where(s => s.GoalAnalysis != null)
+            .SelectMany(s => s.GoalAnalysis.Select(g => new { g.GoalText, g.SuccessRate, Date = s.Date }))
+            .GroupBy(g => g.GoalText)
+            .Where(g => g.Count() > 1)
+            .Select(g => new {
+                GoalText = g.Key,
+                History = g.OrderBy(x => x.Date).ToList()
+            })
+            .OrderByDescending(g => g.History.Count)
+            .Take(5) // Top 5 recurring goals for better visualization
+            .ToList();
+
+        if (!recurringGoals.Any()) return null;
+
+        var labels = recurringGoals.Select(g => FormatLabelForChart(g.GoalText)).ToList();
+        var previousData = recurringGoals.Select(g => g.History.First().SuccessRate).ToList();
+        var currentData = recurringGoals.Select(g => g.History.Last().SuccessRate).ToList();
+
+        var chartConfig = new
+        {
+            type = "bar",
+            data = new
+            {
+                labels = labels,
+                datasets = new[]
+                {
+                    new
+                    {
+                        label = "المستوى الابتدائي (%)",
+                        data = previousData,
+                        backgroundColor = "rgba(148, 163, 184, 0.6)", // slate-400
+                        borderColor = "rgb(148, 163, 184)",
+                        borderWidth = 1
+                    },
+                    new
+                    {
+                        label = "المستوى الحالي (%)",
+                        data = currentData,
+                        backgroundColor = "rgba(16, 185, 129, 0.6)", // emerald-500
+                        borderColor = "rgb(16, 185, 129)",
+                        borderWidth = 1
+                    }
+                }
+            },
+            options = new
+            {
+                scales = new
+                {
+                    y = new
+                    {
+                        beginAtZero = true,
+                        max = 100,
+                        ticks = new { font = new { family = "Cairo", size = 9 } }
+                    },
+                    x = new
+                    {
+                        ticks = new { font = new { family = "Cairo", size = 9, weight = "bold" } }
+                    }
+                },
+                plugins = new
+                {
+                    legend = new
+                    {
+                        display = true,
+                        position = "top",
+                        labels = new { font = new { family = "Cairo", size = 10 } }
+                    }
+                }
+            }
+        };
+
+        return await GenerateChartAsync(chartConfig);
+    }
+
     private byte[]? GetImageBytes(string? base64String)
     {
         if (string.IsNullOrEmpty(base64String)) return null;
@@ -1007,6 +1085,15 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("منحنى التطور الأكاديمي")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
                     var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
                     document.Add(img.SetMarginBottom(15));
+                }
+
+                // --- Skills Evolution Chart (New) ---
+                var skillsEvolutionChartBytes = await GetSkillsEvolutionChartAsync(progress);
+                if (skillsEvolutionChartBytes != null)
+                {
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور المهارات المتكررة")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
+                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    document.Add(skillsImg.SetMarginBottom(20));
                 }
 
                 // --- Visual Skills Evolution (Cards) - Moved Up ---
