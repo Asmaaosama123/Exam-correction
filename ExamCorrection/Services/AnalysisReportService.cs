@@ -596,59 +596,6 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         }
     }
 
-    private async Task<byte[]?> GetStudentProgressLineChartAsync(ExamCorrection.Dtos.Reports.StudentProgressDto progress)
-    {
-        if (progress.ExamSummaries == null || !progress.ExamSummaries.Any()) return null;
-
-        var summaries = progress.ExamSummaries
-            .OrderBy(s => s.Date)
-            .ToList();
-
-        var chartConfig = new
-        {
-            type = "line",
-            data = new
-            {
-                labels = summaries.Select(s => FormatLabelForChart(s.ExamTitle)).ToList(),
-                datasets = new[]
-                {
-                    new
-                    {
-                        label = "درجة الطالب (%)",
-                        data = summaries.Select(s => s.Percentage).ToList(),
-                        borderColor = "#0f8b4c",
-                        backgroundColor = "rgba(15, 139, 76, 0.1)",
-                        borderWidth = 3,
-                        pointBackgroundColor = "#ffffff",
-                        pointBorderColor = "#0f8b4c",
-                        pointBorderWidth = 2,
-                        pointRadius = 5,
-                        fill = true,
-                        tension = 0.4
-                    }
-                }
-            },
-            options = new
-            {
-                scales = new
-                {
-                    y = new
-                    {
-                        beginAtZero = true,
-                        max = 100,
-                        ticks = new { stepSize = 20 }
-                    }
-                },
-                plugins = new
-                {
-                    legend = new { display = false }
-                }
-            }
-        };
-
-        return await GenerateChartAsync(chartConfig);
-    }
-
     private object GetCommonRadarOptions(bool showLegend = false)
     {
         return new
@@ -715,6 +662,62 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         lines.Add(new string(finalArray));
         
         return lines;
+    }
+
+    private async Task<byte[]?> GetStudentProgressLineChartAsync(StudentProgressDto progress)
+    {
+        if (progress.ExamSummaries == null || !progress.ExamSummaries.Any()) return null;
+
+        var sortedExams = progress.ExamSummaries.OrderBy(e => e.Date).ToList();
+        var labels = sortedExams.Select(e => FormatLabelForChart(e.ExamTitle)).ToList();
+        var data = sortedExams.Select(e => e.Percentage).ToList();
+
+        var chartConfig = new
+        {
+            type = "line",
+            data = new
+            {
+                labels = labels,
+                datasets = new[]
+                {
+                    new
+                    {
+                        label = "نسبة الإتقان (%)",
+                        data = data,
+                        borderColor = "#10b981", // Emerald 500
+                        backgroundColor = "rgba(16, 185, 129, 0.1)",
+                        borderWidth = 3,
+                        pointBackgroundColor = "#fff",
+                        pointBorderColor = "#10b981",
+                        pointRadius = 5,
+                        fill = true,
+                        tension = 0.4
+                    }
+                }
+            },
+            options = new
+            {
+                scales = new
+                {
+                    y = new
+                    {
+                        beginAtZero = true,
+                        max = 100,
+                        ticks = new { font = new { family = "Cairo", size = 10 } }
+                    },
+                    x = new
+                    {
+                        ticks = new { font = new { family = "Cairo", size = 10, weight = "bold" } }
+                    }
+                },
+                plugins = new
+                {
+                    legend = new { display = false }
+                }
+            }
+        };
+
+        return await GenerateChartAsync(chartConfig);
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -840,7 +843,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     .ToListAsync();
 
                 var progress = _analysisService.GenerateStudentProgress(student, papers, goals);
-                reportsToGenerate.Add((student, progress, true));
+                reportsToGenerate.Add((student, progress, !string.IsNullOrEmpty(request.ProgressChartBase64)));
             }
             else
             {
@@ -870,7 +873,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 {
                     var studentPapers = papers.Where(p => p.StudentId == stObj.Id).ToList();
                     var progress = _analysisService.GenerateStudentProgress(stObj, studentPapers, goals);
-                    reportsToGenerate.Add((stObj, progress, true));
+                    reportsToGenerate.Add((stObj, progress, false));
                 }
 
                 var summaries = _analysisService.GetStudentsProgressSummary(students, papers, goals)
@@ -986,15 +989,15 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 document.Add(bannerTable);
 
 
-                // --- Progress Chart ---
+                // --- Progress Chart (Integrated Auto-Generation for Outside Downloads) ---
                 byte[]? chartBytes = null;
                 if (!string.IsNullOrEmpty(request.ProgressChartBase64))
                 {
-                    try { chartBytes = GetImageBytes(request.ProgressChartBase64); } catch { }
+                    chartBytes = GetImageBytes(request.ProgressChartBase64);
                 }
-
-                if (chartBytes == null)
+                else if (progress.ExamSummaries != null && progress.ExamSummaries.Any())
                 {
+                    // Automatic generation for calls from the dialog (Outside)
                     chartBytes = await GetStudentProgressLineChartAsync(progress);
                 }
 
