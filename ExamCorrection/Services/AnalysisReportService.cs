@@ -888,7 +888,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 headerTable.AddCell(leftCell);
                 
                 var midCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
-                midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(request.StudentId.HasValue ? "تقرير التطور الأكاديمي" : "تقرير التطور الأكاديمي الشامل للمجموعة")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryGreen));
+                midCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(request.StudentId.HasValue ? "تقرير التطور الأكاديمي للطالب" : "تقرير التطور الأكاديمي الشامل للمجموعة")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryGreen));
                 headerTable.AddCell(midCell);
                 
                 var rightCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
