@@ -999,6 +999,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 {
                     var examContainer = new iText.Layout.Element.Table(1).UseAllAvailableWidth().SetMarginBottom(15).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1f)).SetBackgroundColor(lightGrayBg).SetPadding(10).SetBorderRadius(new iText.Layout.Properties.BorderRadius(8));
                     
+                    var scoreClr = examRec.Percentage >= 50 ? successGreen : dangerRed;
                     var examHead = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
                     string scoreLabel = ArabicTextShaper.Shape("الدرجة: ");
                     string scoreValue = $"{examRec.Score}/{examRec.TotalScore} ({examRec.Percentage:F0}%)";
@@ -1006,7 +1007,6 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(examRec.Date.ToString("yyyy-MM-dd")).SetFont(font).SetFontSize(8).SetFontColor(textSlate)));
                     examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(examRec.ExamTitle)).SetFont(font).SetFontSize(10).SetBold().SetFontColor(primaryGreen)));
                     
-                    var scoreClr = examRec.Percentage >= 50 ? successGreen : dangerRed;
                     examContainer.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(examHead));
 
                     if (examRec.GoalAnalysis != null && examRec.GoalAnalysis.Any())
