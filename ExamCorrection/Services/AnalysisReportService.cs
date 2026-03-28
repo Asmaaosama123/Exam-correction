@@ -1,6 +1,7 @@
 using ExamCorrection.Abstractions;
 using ExamCorrection.Contracts.Analysis;
 using ExamCorrection.Contracts.Reports;
+using ExamCorrection.Dtos.Reports;
 using ExamCorrection.Entities;
 using ExamCorrection.Errors;
 using Microsoft.AspNetCore.Http;
