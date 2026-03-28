@@ -818,17 +818,20 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     reportsToGenerate.Add((stObj, progress, false));
                 }
 
-                var summaries = _analysisService.GetStudentsProgressSummary(students, papers, goals);
+                var summaries = _analysisService.GetStudentsProgressSummary(students, papers, goals)
+                    .OrderBy(s => s.ClassName)
+                    .ThenBy(s => s.StudentName)
+                    .ToList();
 
                 // --- Summary Header ---
                 var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetMarginBottom(20);
                 
                 var leftHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
-                leftHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"التاريخ: {DateTime.Now:yyyy-MM-dd}")).SetFont(font).SetFontSize(8).SetFontColor(textSlate));
+                leftHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"تاريخ التقرير: {DateTime.Now:yyyy-MM-dd}")).SetFont(font).SetFontSize(8).SetFontColor(textSlate));
                 headerTable.AddCell(leftHeader);
                 
                 var midHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
-                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تقرير ملخص أداء الطلاب")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryGreen));
+                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تقرير أداء الطلاب")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryGreen));
                 headerTable.AddCell(midHeader);
                 
                 var rightHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
@@ -1010,9 +1013,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     hCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(txt)).SetFont(font).SetFontSize(8).SetBold().SetFontColor(textSlate));
                     historyHeader.AddCell(hCell);
                 };
-                addHeader("الدرجة المحرزة", iText.Layout.Properties.TextAlignment.LEFT);
-                addHeader("تاريخ الاختبار", iText.Layout.Properties.TextAlignment.CENTER);
-                addHeader("اسم الاختبار", iText.Layout.Properties.TextAlignment.RIGHT);
+                addHeader("الدرجة", iText.Layout.Properties.TextAlignment.LEFT);
+                addHeader("التاريخ", iText.Layout.Properties.TextAlignment.CENTER);
+                addHeader("الاختبار", iText.Layout.Properties.TextAlignment.RIGHT);
                 document.Add(historyHeader);
                 
                 foreach (var examRec in progress.ExamSummaries.OrderByDescending(e => e.Date))
