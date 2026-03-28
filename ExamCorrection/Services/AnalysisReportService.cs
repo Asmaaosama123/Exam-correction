@@ -899,7 +899,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Student Info Banner (Fixed Construction) ---
                 var bannerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetMarginBottom(20).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                Action<string, iText.Layout.Element.IElement, iText.Kernel.Colors.Color> addBannerCell = (lbl, el, clr) => {
+                Action<string, iText.Layout.Element.IBlockElement, iText.Kernel.Colors.Color> addBannerCell = (lbl, el, clr) => {
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(10).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
                     cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(lbl)).SetFont(font).SetFontSize(7).SetFontColor(textSlate).SetBold().SetMarginBottom(2));
                     cell.Add(el);
