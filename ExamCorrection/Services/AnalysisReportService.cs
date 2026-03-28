@@ -77,8 +77,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 
                 var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
-                string printDateText = $"تاريخ الطباعة: {currentDate}";
-                leftCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(printDateText)).SetFont(font).SetFontSize(9));
+                string printDateText = ArabicTextShaper.Shape("تاريخ الطباعة: ") + currentDate;
+                leftCell.Add(new iText.Layout.Element.Paragraph(printDateText).SetFont(font).SetFontSize(9));
                 headerTable.AddCell(leftCell);
 
                 var midCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
@@ -104,9 +104,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(3).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
                     var p = new iText.Layout.Element.Paragraph().SetMargin(0).SetMultipliedLeading(1.0f);
                     
-                    // Shape label and value together to handle BiDi correctly (e.g. for dates)
-                    string fullInfo = $"{lbl}: {val}";
-                    p.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(fullInfo)).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
+                    // Shape label part only to avoid flipping numbers/dates
+                    string label = ArabicTextShaper.Shape($"{lbl}: ");
+                    p.Add(new iText.Layout.Element.Text(label + val).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
                     
                     cell.Add(p);
                     subHeader.AddCell(cell);
@@ -157,8 +157,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 stCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط القوة")).SetFont(font).SetBold().SetFontColor(successGreen).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var strengths = classReport.GoalAnalysis.Where(g => g.SuccessRate >= 50).OrderByDescending(g => g.SuccessRate).Take(5);
                 foreach (var g in strengths) {
-                    string line = $"• {g.GoalText} ({g.SuccessRate:F0}%)";
-                    stCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(line.Replace("(", "\x01").Replace(")", "(").Replace("\x01", ")")))
+                    string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+                    string value = $"({g.SuccessRate:F0}%)";
+                    stCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
                         .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
                 }
                 
@@ -178,8 +179,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 wkCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط الضعف")).SetFont(font).SetBold().SetFontColor(dangerRed).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var weaknesses = classReport.GoalAnalysis.Where(g => g.SuccessRate < 50).OrderBy(g => g.SuccessRate).Take(5);
                 foreach (var g in weaknesses) {
-                    string line = $"• {g.GoalText} ({g.SuccessRate:F0}%)";
-                    wkCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(line.Replace("(", "\x01").Replace(")", "(").Replace("\x01", ")")))
+                    string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+                    string value = $"({g.SuccessRate:F0}%)";
+                    wkCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
                         .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
                 }
 
@@ -358,8 +360,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         strongCell.Add(strongHeader);
 
         foreach (var g in strongGoals) {
-            string line = $"• {g.GoalText} ({g.SuccessRate:F0}%)";
-            var p = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(line.Replace("(", "\x01").Replace(")", "(").Replace("\x01", ")")))
+            string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+            string value = $"({g.SuccessRate:F0}%)";
+            var p = new iText.Layout.Element.Paragraph(label + " " + value)
                 .SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMarginBottom(2).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
             strongCell.Add(p);
         }
@@ -383,8 +386,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
         if (weakGoals.Any()) {
             foreach (var g in weakGoals) {
-                string line = $"• {g.GoalText} ({g.SuccessRate:F0}%)";
-                var p = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(line.Replace("(", "\x01").Replace(")", "(").Replace("\x01", ")")))
+                string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+                string value = $"({g.SuccessRate:F0}%)";
+                var p = new iText.Layout.Element.Paragraph(label + " " + value)
                     .SetFont(font).SetFontSize(8.5f).SetFontColor(darkGray).SetMarginBottom(1).SetMultipliedLeading(1.0f).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
                 weakCell.Add(p);
             }
@@ -412,11 +416,13 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 weakGoals.Select(g => $"{g.GoalText} ({g.SuccessRate:F0}%)"));
             var p = new iText.Layout.Element.Paragraph().SetMultipliedLeading(1.1f).SetMargin(0).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
 
-            string warning = "يجب التركيز الفوري على مراجعة الأهداف لكونها نقاط الضعف الأساسي: ";
-            string goalList = string.Join(" ، ", weakGoals.Select(g => $"{g.GoalText} ){g.SuccessRate:F0}%("));
-            string fullRemedialText = warning + goalList;
+            string warning = ArabicTextShaper.Shape("يجب التركيز الفوري على مراجعة الأهداف لكونها نقاط الضعف الأساسي: ");
+            string goalList = string.Join(" ، ", weakGoals.Select(g => 
+                $"{ArabicTextShaper.Shape(g.GoalText)} ({g.SuccessRate:F0}%)"
+            ));
+            string fullRemedialText = warning + " " + goalList;
             
-            p.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(fullRemedialText))
+            p.Add(new iText.Layout.Element.Text(fullRemedialText)
                 .SetFont(font).SetFontSize(8.5f).SetBold().SetFontColor(roseText));
 
             remedialCell.Add(p);
@@ -876,8 +882,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
                 var datePara = new iText.Layout.Element.Paragraph().SetMargin(0);
-                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape("التاريخ: ")).SetFont(font).SetFontSize(8).SetFontColor(textSlate));
                 datePara.Add(new iText.Layout.Element.Text(DateTime.Now.ToString("yyyy-MM-dd")).SetFont(font).SetFontSize(8).SetFontColor(textSlate));
+                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape("التاريخ: ")).SetFont(font).SetFontSize(8).SetFontColor(textSlate));
                 leftCell.Add(datePara);
                 headerTable.AddCell(leftCell);
                 
@@ -899,10 +905,11 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(val)).SetFont(font).SetFontSize(13).SetBold().SetFontColor(clr));
                     bannerTable.AddCell(cell);
                 };
-                addBannerInfo("اسم الطالب", student.FullName, primaryGreen);
-                addBannerInfo("الصف الدراسي", student.Class?.Name ?? "غير محدد", primaryGreen);
                 addBannerInfo("المستوى التراكمي", progress.PerformanceLevel, progress.OverallAverage >= 50 ? successGreen : dangerRed);
                 document.Add(bannerTable);
+                addBannerInfo("الصف الدراسي", student.Class?.Name ?? "غير محدد", primaryGreen);
+                addBannerInfo("اسم الطالب", student.FullName, primaryGreen);
+
 
                 // --- Progress Chart ---
                 if (report.HasChart)
@@ -992,12 +999,14 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 {
                     var examContainer = new iText.Layout.Element.Table(1).UseAllAvailableWidth().SetMarginBottom(15).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1f)).SetBackgroundColor(lightGrayBg).SetPadding(10).SetBorderRadius(new iText.Layout.Properties.BorderRadius(8));
                     
-                    var examHead = new iText.Layout.Element.Table(3).UseAllAvailableWidth();
-                    examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(examRec.ExamTitle)).SetFont(font).SetFontSize(10).SetBold().SetFontColor(primaryGreen)));
+                    var examHead = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+                    string scoreLabel = ArabicTextShaper.Shape("الدرجة: ");
+                    string scoreValue = $"{examRec.Score}/{examRec.TotalScore} ({examRec.Percentage:F0}%)";
+                    examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).Add(new iText.Layout.Element.Paragraph(scoreLabel + scoreValue).SetFont(font).SetFontSize(9).SetBold().SetFontColor(scoreClr)));
                     examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(examRec.Date.ToString("yyyy-MM-dd")).SetFont(font).SetFontSize(8).SetFontColor(textSlate)));
+                    examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(examRec.ExamTitle)).SetFont(font).SetFontSize(10).SetBold().SetFontColor(primaryGreen)));
                     
                     var scoreClr = examRec.Percentage >= 50 ? successGreen : dangerRed;
-                    examHead.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"الدرجة: {examRec.Score}/{examRec.TotalScore} (%{examRec.Percentage:F0})")).SetFont(font).SetFontSize(9).SetBold().SetFontColor(scoreClr)));
                     examContainer.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(examHead));
 
                     if (examRec.GoalAnalysis != null && examRec.GoalAnalysis.Any())
@@ -1009,10 +1018,11 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                         
                         // Strengths for this exam
                         var sCellExam = new iText.Layout.Element.Cell().SetPadding(8).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(iText.Kernel.Colors.ColorConstants.WHITE).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
-                        sCellExam.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"نقاط القوة ({examStrengths.Count})")).SetFont(font).SetFontSize(8).SetBold().SetFontColor(successGreen).SetBackgroundColor(successGreenBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
+                        string strengthHeaderTxt = ArabicTextShaper.Shape($"نقاط القوة ({examStrengths.Count})");
+                        sCellExam.Add(new iText.Layout.Element.Paragraph(strengthHeaderTxt).SetFont(font).SetFontSize(8).SetBold().SetFontColor(successGreen).SetBackgroundColor(successGreenBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
                         foreach(var g in examStrengths) {
                             var row = new iText.Layout.Element.Table(new float[] { 1, 3, 2 }).UseAllAvailableWidth().SetMarginTop(4);
-                            row.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph($"%{g.SuccessRate:F0}").SetFont(font).SetFontSize(7).SetFontColor(successGreen)));
+                            row.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph($"{g.SuccessRate:F0}%").SetFont(font).SetFontSize(7).SetFontColor(successGreen)));
                             float rate = (float)g.SuccessRate;
                             var pb = new iText.Layout.Element.Table(new float[] { rate, 100f-rate }).UseAllAvailableWidth();
                             pb.AddCell(new iText.Layout.Element.Cell().SetHeight(3).SetBackgroundColor(successGreen).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBorderRadius(new iText.Layout.Properties.BorderRadius(1.5f)));
@@ -1025,7 +1035,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                         // Recommendations for this exam
                         var rCellExam = new iText.Layout.Element.Cell().SetPadding(8).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(iText.Kernel.Colors.ColorConstants.WHITE).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
-                        rCellExam.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"توصيات للتطوير ({examRecs.Count})")).SetFont(font).SetFontSize(8).SetBold().SetFontColor(dangerRed).SetBackgroundColor(dangerRedBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
+                        string recHeaderTxt = ArabicTextShaper.Shape($"توصيات للتطوير نقاط الضعف ({examRecs.Count})");
+                        rCellExam.Add(new iText.Layout.Element.Paragraph(recHeaderTxt).SetFont(font).SetFontSize(8).SetBold().SetFontColor(dangerRed).SetBackgroundColor(dangerRedBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
                         foreach(var g in examRecs) {
                             var row = new iText.Layout.Element.Table(new float[] { 1, 3, 2 }).UseAllAvailableWidth().SetMarginTop(4);
                             row.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).Add(new iText.Layout.Element.Paragraph($"%{g.SuccessRate:F0}").SetFont(font).SetFontSize(7).SetFontColor(dangerRed)));
