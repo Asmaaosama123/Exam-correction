@@ -838,28 +838,28 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Summary Table ---
                 var table = new iText.Layout.Element.Table(new float[] { 3, 1, 1, 1, 2, 2, 1 }).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                string[] headers = { "اسم الطالب", "الفصل", "الاختبارات", "المتوسط", "نقاط القوة", "تحتاج دعم", "التوجه" };
+                string[] headers = {  "التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
                 foreach (var h in headers)
                     table.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryGreen).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 1f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetPadding(8).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE)));
 
                 foreach (var s in summaries)
                 {
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.StudentName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.ClassName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(s.ExamsTaken.ToString()).SetFontSize(8).SetFontColor(darkGray)));
+                    var changeText = (s.Change >= 0 ? "+" : "") + s.Change.ToString("F0") + "%";
+                    var changeClr = s.Change > 0 ? primaryGreen : s.Change < 0 ? dangerRed : darkGray;
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(changeText).SetFont(font).SetBold().SetFontColor(changeClr).SetFontSize(8)));
+                    var weaknessesText = string.Join("، ", s.Weaknesses);
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(weaknessesText)).SetFont(font).SetFontSize(7).SetFontColor(dangerRed).SetBold()));
+        
+                    var strengthsText = string.Join("، ", s.Strengths);
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(strengthsText)).SetFont(font).SetFontSize(7).SetFontColor(primaryGreen).SetBold()));
                     
                     var avgClr = s.OverallAverage >= 50 ? primaryGreen : dangerRed;
                     table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{s.OverallAverage:F0}%").SetFont(font).SetBold().SetFontColor(avgClr).SetFontSize(9)));
                     
-                    var strengthsText = string.Join("، ", s.Strengths);
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(strengthsText)).SetFont(font).SetFontSize(7).SetFontColor(primaryGreen).SetBold()));
-                    
-                    var weaknessesText = string.Join("، ", s.Weaknesses);
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(weaknessesText)).SetFont(font).SetFontSize(7).SetFontColor(dangerRed).SetBold()));
-                    
-                    var changeText = (s.Change >= 0 ? "+" : "") + s.Change.ToString("F0") + "%";
-                    var changeClr = s.Change > 0 ? primaryGreen : s.Change < 0 ? dangerRed : darkGray;
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(changeText).SetFont(font).SetBold().SetFontColor(changeClr).SetFontSize(8)));
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(s.ExamsTaken.ToString()).SetFontSize(8).SetFontColor(darkGray)));
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.ClassName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.StudentName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
+
                 }
                 document.Add(table);
             }
