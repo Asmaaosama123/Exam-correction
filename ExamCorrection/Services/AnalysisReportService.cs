@@ -1008,7 +1008,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Summary Table ---
                 var table = new iText.Layout.Element.Table(new float[] { 3, 1, 1, 1, 2, 2, 1 }).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                string[] headers = {  "التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
+                string[] headers = {  " تعديل 1 التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
                 foreach (var h in headers)
                     table.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryBlue).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetPadding(8).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE)));
 
