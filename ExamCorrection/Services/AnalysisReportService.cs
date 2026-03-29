@@ -560,18 +560,18 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions(false)
         };
 
-        return await GenerateChartAsync(chartConfig);
+        return await GenerateChartAsync(chartConfig, 500, 420);
     }
 
-    private async Task<byte[]?> GenerateChartAsync(object chartConfig)
+    private async Task<byte[]?> GenerateChartAsync(object chartConfig, int width = 500, int height = 250)
     {
         try
         {
             var requestBody = new
             {
                 backgroundColor = "white",
-                width = 500,
-                height = 500,
+                width = width,
+                height = height,
                 format = "png",
                 version = "3", // Specify Chart.js v3 to use scales.r structure
                 chart = chartConfig
@@ -713,12 +713,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 },
                 plugins = new
                 {
-                    legend = new { display = false }
-                }
-            }
-        };
-
-        return await GenerateChartAsync(chartConfig);
+        return await GenerateChartAsync(chartConfig, 500, 220);
     }
 
     private async Task<byte[]?> GetSkillsEvolutionChartAsync(StudentProgressDto progress)
@@ -790,13 +785,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     {
                         display = true,
                         position = "top",
-                        labels = new { font = new { family = "Cairo", size = 10 } }
-                    }
-                }
-            }
-        };
-
-        return await GenerateChartAsync(chartConfig);
+        return await GenerateChartAsync(chartConfig, 500, 280);
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -931,6 +920,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 var teacherExamIds = await teacherExamsQuery.Select(e => e.Id).ToListAsync();
 
                 var papers = await _context.StudentExamPapers
+                    .Include(p => p.Exam)
                     .IgnoreQueryFilters()
                     .Where(p => teacherExamIds.Contains(p.ExamId) && p.OwnerId == userId)
                     .ToListAsync();
@@ -1070,13 +1060,15 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Progress Chart (Integrated Auto-Generation for Outside Downloads) ---
                 byte[]? chartBytes = null;
-                if (!string.IsNullOrEmpty(request.ProgressChartBase64))
+                // Use screenshot ONLY if it's an individual report and a screenshot was provided
+                if (request.StudentId.HasValue && !string.IsNullOrEmpty(request.ProgressChartBase64))
                 {
                     chartBytes = GetImageBytes(request.ProgressChartBase64);
                 }
-                else if (progress.ExamSummaries != null && progress.ExamSummaries.Any())
+                
+                // Fallback to backend generation if no screenshot (mandatory for Class Reports)
+                if (chartBytes == null && progress.ExamSummaries != null && progress.ExamSummaries.Any())
                 {
-                    // Automatic generation for calls from the dialog (Outside)
                     chartBytes = await GetStudentProgressLineChartAsync(progress);
                 }
 
