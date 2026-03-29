@@ -308,9 +308,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         // Student Info Card
         var infoBox = new iText.Layout.Element.Table(5).UseAllAvailableWidth().SetMarginBottom(5).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
         Action<string, string, iText.Kernel.Colors.Color> addBit = (l, v, c) => {
-            var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetPadding(3).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
-            cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(l)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMargin(0));
-            cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(v)).SetFont(font).SetFontSize(10).SetBold().SetFontColor(c).SetMargin(0));
+            var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetPadding(4).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
+            cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(l)).SetFont(font).SetFontSize(10).SetFontColor(darkGray).SetMargin(0));
+            cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(v)).SetFont(font).SetFontSize(12).SetBold().SetFontColor(c).SetMargin(0));
             infoBox.AddCell(cell);
         };
         addBit("الحالة", studentReport.Status, studentReport.Percentage >= 50 ? successGreen : dangerRed);
@@ -325,7 +325,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             try {
                 var mainChartTable = new iText.Layout.Element.Table(1).UseAllAvailableWidth().SetMarginBottom(0);
                 var cell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetPadding(0);
-                cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الأداء العام للطالب")).SetFont(font).SetFontSize(9).SetBold().SetFontColor(primaryBlue).SetMargin(0));
+                cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("الأداء العام للطالب")).SetFont(font).SetFontSize(11).SetBold().SetFontColor(primaryBlue).SetMargin(0));
                 cell.Add(new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(generalChartBytes)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER));
                 mainChartTable.AddCell(cell);
                 document.Add(mainChartTable);
@@ -335,13 +335,13 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 var classLegend = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetPadding(1).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
                 var pClassTable = new iText.Layout.Element.Table(2).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.RIGHT);
-                pClassTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسط الفصل  ")).SetFont(font).SetFontSize(7.5f).SetMargin(0)));
+                pClassTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسط الفصل  ")).SetFont(font).SetFontSize(9).SetMargin(0)));
                 pClassTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph().SetBackgroundColor(new iText.Kernel.Colors.DeviceRgb(244, 114, 182)).SetWidth(12).SetHeight(6).SetMarginLeft(3)));
                 classLegend.Add(pClassTable);
                 
                 var studentLegend = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetPadding(1).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
                 var pStudentTable = new iText.Layout.Element.Table(2).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.RIGHT);
-                pStudentTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("أداء الطالب  ")).SetFont(font).SetFontSize(7.5f).SetMargin(0)));
+                pStudentTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("أداء الطالب  ")).SetFont(font).SetFontSize(9).SetMargin(0)));
                 pStudentTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).Add(new iText.Layout.Element.Paragraph().SetBackgroundColor(accentBlue).SetWidth(12).SetHeight(6).SetMarginLeft(3)));
                 studentLegend.Add(pStudentTable);
                 
@@ -361,7 +361,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         var strongCell = new iText.Layout.Element.Cell().SetPadding(5).SetBorder(new iText.Layout.Borders.SolidBorder(emeraldText, 0.5f)).SetBackgroundColor(emeraldBg);
         var strongHeader = new iText.Layout.Element.Paragraph().SetMarginBottom(3).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
         string strongHeaderText = $"){strongGoals.Count}( المهارات المتقنة )نقاط القوة(";
-        strongHeader.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(strongHeaderText)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(emeraldText));
+        strongHeader.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(strongHeaderText)).SetFont(font).SetFontSize(11).SetBold().SetFontColor(emeraldText));
         strongCell.Add(strongHeader);
 
         foreach (var g in strongGoals) {
@@ -385,7 +385,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         var weakCell = new iText.Layout.Element.Cell().SetPadding(5).SetBorder(new iText.Layout.Borders.SolidBorder(roseText, 0.5f)).SetBackgroundColor(roseBg);
         var weakHeader = new iText.Layout.Element.Paragraph().SetMarginBottom(3).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
         string weakHeaderText = $"){weakGoals.Count}( المهارات المتعثرة )نقاط الضعف(";
-        weakHeader.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(weakHeaderText)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(roseText));
+        weakHeader.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(weakHeaderText)).SetFont(font).SetFontSize(11).SetBold().SetFontColor(roseText));
         weakCell.Add(weakHeader);
 
 
@@ -499,7 +499,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions()
         };
 
-        return await GenerateChartAsync(chartConfig);
+        return await GenerateChartAsync(chartConfig, height: 400);
     }
 
     private async Task<byte[]?> GetStudentStrengthsRadarChartAsync(StudentReportDto studentReport)
@@ -531,7 +531,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions(false)
         };
 
-        return await GenerateChartAsync(chartConfig, 400, 350);
+        return await GenerateChartAsync(chartConfig, 400, 450);
     }
 
     private async Task<byte[]?> GetStudentWeaknessesRadarChartAsync(StudentReportDto studentReport)
@@ -564,10 +564,10 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions(false)
         };
 
-        return await GenerateChartAsync(chartConfig, 400, 350); // Smaller radar
+        return await GenerateChartAsync(chartConfig, 400, 450); // Larger radar
     }
 
-    private async Task<byte[]?> GenerateChartAsync(object chartConfig, int width = 500, int height = 250)
+    private async Task<byte[]?> GenerateChartAsync(object chartConfig, int width = 500, int height = 400)
     {
         try
         {
@@ -616,7 +616,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     {
                         stepSize = 20,
                         display = true,
-                        font = new { size = 10 },
+                        font = new { size = 12, weight = "bold" },
                         color = "#94a3b8",
                         backdropColor = "transparent",
                         z = 1
@@ -625,7 +625,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     angleLines = new { color = "rgba(148,163,184,0.3)" },
                     pointLabels = new
                     {
-                        font = new { size = 11, weight = "bold" },
+                        font = new { size = 13, weight = "bold" },
                         color = "#64748b"
                     }
                 }
@@ -724,7 +724,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 1200, 150); // Ultra thin panoramic
+        return await GenerateChartAsync(chartConfig, 1200, 350); // Enhanced panorama
     }
 
     private async Task<byte[]?> GetSkillsEvolutionChartAsync(IEnumerable<StudentProgressDto> reports)
@@ -821,7 +821,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 1200, 220); // Thin panoramic bar chart
+        return await GenerateChartAsync(chartConfig, 1200, 400); // Enhanced panoramic bar chart
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -881,7 +881,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
         try
         {
-            var json = JsonSerializer.Serialize(new { chart = JsonSerializer.Serialize(chartConfig), width = 800, height = 400, backgroundColor = "white" });
+            var json = JsonSerializer.Serialize(new { chart = JsonSerializer.Serialize(chartConfig), width = 800, height = 500, backgroundColor = "white" });
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync("https://quickchart.io/chart", content);
             if (response.IsSuccessStatusCode) return await response.Content.ReadAsByteArrayAsync();
@@ -1065,7 +1065,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
                 var datePara = new iText.Layout.Element.Paragraph().SetMargin(0).SetFontSize(8);
-                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape("تاريخ التقرير: ")).SetFont(font).SetFontColor(primaryBlue).SetBold());
+                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(":تاريخ التقرير")).SetFont(font).SetFontColor(primaryBlue).SetBold());
                 datePara.Add(new iText.Layout.Element.Text(DateTime.Now.ToString("yyyy-MM-dd")).SetFont(font).SetFontColor(textSlate));
                 leftCell.Add(datePara);
                 headerTable.AddCell(leftCell);
@@ -1085,21 +1085,21 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 var bannerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetMarginBottom(20).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
                 Action<string, iText.Layout.Element.IBlockElement, iText.Kernel.Colors.Color> addBannerCell = (lbl, el, clr) => {
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(12).SetBackgroundColor(iText.Kernel.Colors.ColorConstants.WHITE).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
-                    cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(lbl)).SetFont(font).SetFontSize(7).SetFontColor(textSlate).SetBold().SetMarginBottom(4));
+                    cell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(lbl)).SetFont(font).SetFontSize(10).SetFontColor(textSlate).SetBold().SetMarginBottom(4));
                     cell.Add(el);
                     bannerTable.AddCell(cell);
                 };
 
                 // Cumulative Level
-                var levelP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(progress.PerformanceLevel)).SetFont(font).SetFontSize(12).SetBold().SetFontColor(progress.OverallAverage >= 50 ? successGreen : dangerRed);
+                var levelP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(progress.PerformanceLevel)).SetFont(font).SetFontSize(14).SetBold().SetFontColor(progress.OverallAverage >= 50 ? successGreen : dangerRed);
                 addBannerCell("المستوى التراكمي", levelP, primaryBlue);
 
                 // Class / Grade
-                var classP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.Class?.Name ?? "غير محدد")).SetFont(font).SetFontSize(12).SetBold().SetFontColor(darkGray);
+                var classP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.Class?.Name ?? "غير محدد")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(darkGray);
                 addBannerCell("الفصل الدراسي", classP, primaryBlue);
 
                 // Student Name
-                var nameP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.FullName)).SetFont(font).SetFontSize(12).SetBold().SetFontColor(darkGray);
+                var nameP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.FullName)).SetFont(font).SetFontSize(14).SetBold().SetFontColor(darkGray);
                 addBannerCell("اسم الطالب", nameP, primaryBlue);
 
                 document.Add(bannerTable);
