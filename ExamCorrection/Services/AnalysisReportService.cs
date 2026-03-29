@@ -997,7 +997,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 headerTable.AddCell(leftHeader);
                 
                 var midHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
-                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تقرير أداء الطلاب التراكمي")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryBlue));
+                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape( " تعديل تقرير أداء الطلاب التراكمي")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryBlue));
                 headerTable.AddCell(midHeader);
                 
                 var rightHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
@@ -1008,7 +1008,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Summary Table ---
                 var table = new iText.Layout.Element.Table(new float[] { 3, 1, 1, 1, 2, 2, 1 }).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                string[] headers = {  " تعديل 1 التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
+                string[] headers = {  " التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
                 foreach (var h in headers)
                     table.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryBlue).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetPadding(8).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE)));
 
@@ -1042,7 +1042,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور مهارات الفصل")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(primaryBlue).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(10));
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسط استقرار وإتقان المهارات المتكررة لجميع الطلاب في المجموعة")).SetFont(font).SetFontSize(10).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(15));
                     
-                    var classSkillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(classSkillsChart)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    var classSkillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(classSkillsChart)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
                     document.Add(classSkillsImg.SetMarginBottom(30));
                 }
             }
@@ -1122,7 +1122,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 if (chartBytes != null)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("منحنى التطور الأكاديمي")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(img.SetMarginBottom(15));
                 }
 
@@ -1133,7 +1133,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تطور المهارات المتكررة")).SetFont(font).SetFontSize(12).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY).SetMarginBottom(2));
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل استقرار وإتقان المهارات التي تم قياسها في أكثر من تقييم")).SetFont(font).SetFontSize(9).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetMarginBottom(8));
                     
-                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(skillsImg.SetMarginBottom(20));
                 }
 
