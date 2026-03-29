@@ -560,7 +560,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions(false)
         };
 
-        return await GenerateChartAsync(chartConfig, 500, 420);
+        return await GenerateChartAsync(chartConfig, 400, 350); // Smaller radar
     }
 
     private async Task<byte[]?> GenerateChartAsync(object chartConfig, int width = 500, int height = 250)
@@ -713,7 +713,12 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 },
                 plugins = new
                 {
-        return await GenerateChartAsync(chartConfig, 500, 220);
+                    legend = new { display = false }
+                }
+            }
+        };
+
+        return await GenerateChartAsync(chartConfig, 800, 140); // Ultra panoramic, thin aspect ratio
     }
 
     private async Task<byte[]?> GetSkillsEvolutionChartAsync(StudentProgressDto progress)
@@ -784,8 +789,13 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     legend = new
                     {
                         display = true,
-                        position = "top",
-        return await GenerateChartAsync(chartConfig, 500, 280);
+                        position = "top"
+                    }
+                }
+            }
+        };
+
+        return await GenerateChartAsync(chartConfig, 800, 180); // Ultra panoramic bar chart
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -1075,7 +1085,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 if (chartBytes != null)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("منحنى التطور الأكاديمي")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(380).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(img.SetMarginBottom(15));
                 }
 
@@ -1084,7 +1094,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 if (skillsEvolutionChartBytes != null)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور المهارات المتكررة")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(500).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(380).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(skillsImg.SetMarginBottom(20));
                 }
 
