@@ -157,14 +157,14 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 // --- Strengths & Weaknesses (Row) ---
                 var swTable = new iText.Layout.Element.Table(new float[] { 1, 0.1f, 1 }).UseAllAvailableWidth().SetMarginTop(10).SetMarginLeft(15).SetMarginRight(15).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
                 
-                var stCell = new iText.Layout.Element.Cell().SetPadding(10).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
+                var stCell = new iText.Layout.Element.Cell().SetPadding(6).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
                 stCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط القوة")).SetFont(font).SetBold().SetFontColor(successGreen).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var strengths = classReport.GoalAnalysis.Where(g => g.SuccessRate >= 50).OrderByDescending(g => g.SuccessRate).Take(5);
                 foreach (var g in strengths) {
                     string label = ArabicTextShaper.Shape($"\u2022 {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     stCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(12));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(10));
                 }
                 
                 // Add Class Strength Chart if available
@@ -172,7 +172,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     try {
                         byte[]? imageBytes = GetImageBytes(request.ClassStrengthRadarImageBase64);
                         if (imageBytes != null) {
-                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(275);
+                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(180);
                             stCell.Add(img);
                         }
                     } catch {}
@@ -180,14 +180,14 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 swTable.AddCell(stCell);
                 swTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)); // Gutter
 
-                var wkCell = new iText.Layout.Element.Cell().SetPadding(10).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
+                var wkCell = new iText.Layout.Element.Cell().SetPadding(6).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
                 wkCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط الضعف")).SetFont(font).SetBold().SetFontColor(dangerRed).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var weaknesses = classReport.GoalAnalysis.Where(g => g.SuccessRate < 50).OrderBy(g => g.SuccessRate).Take(5);
                 foreach (var g in weaknesses) {
                     string label = ArabicTextShaper.Shape($"\u2022 {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     wkCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(12));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(10));
                 }
 
                 // Add Class Weakness Chart if available
@@ -195,7 +195,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     try {
                         byte[]? imageBytes = GetImageBytes(request.ClassWeaknessRadarImageBase64);
                         if (imageBytes != null) {
-                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(275);
+                            var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(imageBytes)).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetWidth(180);
                             wkCell.Add(img);
                         }
                     } catch {}
