@@ -105,10 +105,12 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(3).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
                     var p = new iText.Layout.Element.Paragraph().SetMargin(0).SetMultipliedLeading(1.0f);
                     
-                    // Shape label part to avoid flipping numbers/dates
+                    // Shape label AND value parts to avoid flipping
                     string label = ArabicTextShaper.Shape($"{lbl}: ");
+                    string value = ArabicTextShaper.Shape(val);
+                    
                     p.Add(new iText.Layout.Element.Text(label).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
-                    p.Add(new iText.Layout.Element.Text(val).SetFont(font).SetFontSize(9).SetFontColor(darkGray));
+                    p.Add(new iText.Layout.Element.Text(value).SetFont(font).SetFontSize(9).SetFontColor(darkGray));
                     
                     cell.Add(p);
                     subHeader.AddCell(cell);
@@ -153,16 +155,16 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 }
 
                 // --- Strengths & Weaknesses (Row) ---
-                var swTable = new iText.Layout.Element.Table(2).UseAllAvailableWidth().SetMarginTop(10).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+                var swTable = new iText.Layout.Element.Table(new float[] { 1, 0.1f, 1 }).UseAllAvailableWidth().SetMarginTop(10).SetMarginLeft(15).SetMarginRight(15).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
                 
                 var stCell = new iText.Layout.Element.Cell().SetPadding(10).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
                 stCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط القوة")).SetFont(font).SetBold().SetFontColor(successGreen).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var strengths = classReport.GoalAnalysis.Where(g => g.SuccessRate >= 50).OrderByDescending(g => g.SuccessRate).Take(5);
                 foreach (var g in strengths) {
-                    string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+                    string label = ArabicTextShaper.Shape($"\u2022 {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     stCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(12));
                 }
                 
                 // Add Class Strength Chart if available
@@ -176,15 +178,16 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     } catch {}
                 }
                 swTable.AddCell(stCell);
+                swTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)); // Gutter
 
                 var wkCell = new iText.Layout.Element.Cell().SetPadding(10).SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 1)).SetBackgroundColor(lightGrayBg);
                 wkCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("نقاط الضعف")).SetFont(font).SetBold().SetFontColor(dangerRed).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 var weaknesses = classReport.GoalAnalysis.Where(g => g.SuccessRate < 50).OrderBy(g => g.SuccessRate).Take(5);
                 foreach (var g in weaknesses) {
-                    string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+                    string label = ArabicTextShaper.Shape($"\u2022 {g.GoalText}");
                     string value = $"({g.SuccessRate:F0}%)";
                     wkCell.Add(new iText.Layout.Element.Paragraph(label + " " + value)
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(12));
                 }
 
                 // Add Class Weakness Chart if available
@@ -352,7 +355,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         var strongGoals = studentReport.GoalAnalysis.Where(g => g.SuccessRate >= 50).OrderByDescending(g => g.SuccessRate).ToList();
         var weakGoals = studentReport.GoalAnalysis.Where(g => g.SuccessRate < 50).OrderBy(g => g.SuccessRate).ToList();
 
-        var skillsGrid = new iText.Layout.Element.Table(2).UseAllAvailableWidth().SetMarginBottom(5).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+        var skillsGrid = new iText.Layout.Element.Table(new float[] { 1, 0.1f, 1 }).UseAllAvailableWidth().SetMarginBottom(5).SetMarginLeft(15).SetMarginRight(15).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
 
         // --- Strong Skills ---
         var strongCell = new iText.Layout.Element.Cell().SetPadding(5).SetBorder(new iText.Layout.Borders.SolidBorder(emeraldText, 0.5f)).SetBackgroundColor(emeraldBg);
@@ -362,10 +365,10 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         strongCell.Add(strongHeader);
 
         foreach (var g in strongGoals) {
-            string label = ArabicTextShaper.Shape($"• {g.GoalText}");
+            string label = ArabicTextShaper.Shape($"\u2022 {g.GoalText}");
             string value = $"({g.SuccessRate:F0}%)";
             var p = new iText.Layout.Element.Paragraph(label + " " + value)
-                .SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMarginBottom(2).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+                .SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetMarginBottom(2).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).SetPaddingRight(12);
             strongCell.Add(p);
         }
         if (!strongGoals.Any()) strongCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("لا توجد مهارات متقنة حالياً")).SetFont(font).SetFontSize(8).SetItalic().SetFontColor(darkGray));
@@ -376,6 +379,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             } catch {}
         }
         skillsGrid.AddCell(strongCell);
+        skillsGrid.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER)); // Gutter
 
         // --- Weak Skills ---
         var weakCell = new iText.Layout.Element.Cell().SetPadding(5).SetBorder(new iText.Layout.Borders.SolidBorder(roseText, 0.5f)).SetBackgroundColor(roseBg);
@@ -711,6 +715,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                         ticks = new { font = new { family = "Cairo", size = 10, weight = "bold" } }
                     }
                 },
+                maintainAspectRatio = false,
+                responsive = true,
                 plugins = new
                 {
                     legend = new { display = false }
@@ -718,7 +724,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 1000, 180); // Ultra panoramic
+        return await GenerateChartAsync(chartConfig, 1200, 150); // Ultra thin panoramic
     }
 
     private async Task<byte[]?> GetSkillsEvolutionChartAsync(IEnumerable<StudentProgressDto> reports)
@@ -803,6 +809,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                         ticks = new { font = new { family = "Cairo", size = 9, weight = "bold" } }
                     }
                 },
+                maintainAspectRatio = false,
                 plugins = new
                 {
                     legend = new
@@ -814,7 +821,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 1000, 220); // Ultra panoramic bar chart
+        return await GenerateChartAsync(chartConfig, 1200, 220); // Thin panoramic bar chart
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -1035,7 +1042,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور مهارات الفصل")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(primaryBlue).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(10));
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسط استقرار وإتقان المهارات المتكررة لجميع الطلاب في المجموعة")).SetFont(font).SetFontSize(10).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(15));
                     
-                    var classSkillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(classSkillsChart)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    var classSkillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(classSkillsChart)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
                     document.Add(classSkillsImg.SetMarginBottom(30));
                 }
             }
@@ -1115,7 +1122,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 if (chartBytes != null)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("منحنى التطور الأكاديمي")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(img.SetMarginBottom(15));
                 }
 
@@ -1126,7 +1133,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تطور المهارات المتكررة")).SetFont(font).SetFontSize(12).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY).SetMarginBottom(2));
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل استقرار وإتقان المهارات التي تم قياسها في أكثر من تقييم")).SetFont(font).SetFontSize(9).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetMarginBottom(8));
                     
-                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(280).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(skillsImg.SetMarginBottom(20));
                 }
 
@@ -1150,7 +1157,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تطور المهارات ")).SetFont(font).SetFontSize(12).SetBold().SetFontColor(darkGray).SetMarginTop(5));
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل استقرار وإتقان المهارات التي تم قياسها في أكثر من تقييم")).SetFont(font).SetFontSize(8).SetFontColor(textSlate).SetMarginBottom(10));
                     
-                    var skillsGrid = new iText.Layout.Element.Table(2).UseAllAvailableWidth().SetMarginBottom(15);
+                    var skillsGrid = new iText.Layout.Element.Table(2).UseAllAvailableWidth().SetMarginLeft(15).SetMarginRight(15).SetMarginBottom(15);
                     
                     foreach (var skill in goalMap)
                     {
