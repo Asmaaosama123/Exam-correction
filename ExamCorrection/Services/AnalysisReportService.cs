@@ -78,7 +78,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 
                 var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT);
-                string printDateText = ArabicTextShaper.Shape("تاريخ التقرير: ") + currentDate;
+                string printDateText = currentDate + ArabicTextShaper.Shape(" :تاريخ التقرير") ;
                 leftCell.Add(new iText.Layout.Element.Paragraph(printDateText).SetFont(font).SetFontSize(9));
                 headerTable.AddCell(leftCell);
 
@@ -527,7 +527,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             options = GetCommonRadarOptions(false)
         };
 
-        return await GenerateChartAsync(chartConfig);
+        return await GenerateChartAsync(chartConfig, 400, 350);
     }
 
     private async Task<byte[]?> GetStudentWeaknessesRadarChartAsync(StudentReportDto studentReport)
@@ -718,30 +718,49 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 800, 140); // Ultra panoramic, thin aspect ratio
+        return await GenerateChartAsync(chartConfig, 1000, 180); // Ultra panoramic
     }
 
-    private async Task<byte[]?> GetSkillsEvolutionChartAsync(StudentProgressDto progress)
+    private async Task<byte[]?> GetSkillsEvolutionChartAsync(IEnumerable<StudentProgressDto> reports)
     {
-        // Identify recurring goals (same logic as used for cards)
-        var recurringGoals = progress.ExamSummaries
-            .Where(s => s.GoalAnalysis != null)
-            .SelectMany(s => s.GoalAnalysis.Select(g => new { g.GoalText, g.SuccessRate, Date = s.Date }))
+        if (reports == null || !reports.Any()) return null;
+
+        // Flatten all goals across all students/exams
+        var allGoalPoints = reports
+            .Where(r => r.ExamSummaries != null)
+            .SelectMany(r => r.ExamSummaries
+                .Where(s => s.GoalAnalysis != null)
+                .SelectMany(s => s.GoalAnalysis.Select(g => new { g.GoalText, g.SuccessRate, Date = s.Date, StudentId = r.StudentId })));
+
+        // Identify recurring goals by GoalText
+        var recurringGoals = allGoalPoints
             .GroupBy(g => g.GoalText)
-            .Where(g => g.Count() > 1)
+            .Where(g => g.Select(s => s.Date).Distinct().Count() > 1) // Must appear in at least 2 distinct dates/exams
             .Select(g => new {
                 GoalText = g.Key,
-                History = g.OrderBy(x => x.Date).ToList()
+                // Average the success rates for the "Initial" (first date) and "Current" (last date) for each student first, then average across students
+                HistoryByStudent = g.GroupBy(s => s.StudentId)
+                                    .Select(s => new {
+                                        Initial = s.OrderBy(x => x.Date).First().SuccessRate,
+                                        Current = s.OrderBy(x => x.Date).Last().SuccessRate
+                                    }).ToList()
             })
-            .OrderByDescending(g => g.History.Count)
-            .Take(5) // Top 5 recurring goals for better visualization
+            .Select(g => new {
+                GoalText = g.GoalText,
+                AverageInitial = g.HistoryByStudent.Average(h => h.Initial),
+                AverageCurrent = g.HistoryByStudent.Average(h => h.Current),
+                StudentsCount = g.HistoryByStudent.Count
+            })
+            .OrderByDescending(g => g.StudentsCount)
+            .ThenByDescending(g => g.AverageCurrent)
+            .Take(5) // Top 5 categories for visualization
             .ToList();
 
         if (!recurringGoals.Any()) return null;
 
         var labels = recurringGoals.Select(g => FormatLabelForChart(g.GoalText)).ToList();
-        var previousData = recurringGoals.Select(g => g.History.First().SuccessRate).ToList();
-        var currentData = recurringGoals.Select(g => g.History.Last().SuccessRate).ToList();
+        var previousData = recurringGoals.Select(g => g.AverageInitial).ToList();
+        var currentData = recurringGoals.Select(g => g.AverageCurrent).ToList();
 
         var chartConfig = new
         {
@@ -795,7 +814,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
         };
 
-        return await GenerateChartAsync(chartConfig, 800, 180); // Ultra panoramic bar chart
+        return await GenerateChartAsync(chartConfig, 1000, 220); // Ultra panoramic bar chart
     }
 
     private byte[]? GetImageBytes(string? base64String)
@@ -964,11 +983,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetMarginBottom(20);
                 
                 var leftHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
-                string dateLabel = ArabicTextShaper.Shape("تاريخ التقرير: ");
-                string dateVal = DateTime.Now.ToString("yyyy-MM-dd");
+                string printDateText = DateTime.Now.ToString("yyyy-MM-dd") + ArabicTextShaper.Shape(" :تاريخ التقرير");
                 var dateP = new iText.Layout.Element.Paragraph().SetMargin(0).SetFontSize(8);
-                dateP.Add(new iText.Layout.Element.Text(dateLabel).SetFont(font).SetFontColor(primaryBlue).SetBold());
-                dateP.Add(new iText.Layout.Element.Text(dateVal).SetFont(font).SetFontColor(textSlate));
+                dateP.Add(new iText.Layout.Element.Text(printDateText).SetFont(font).SetFontColor(textSlate));
                 leftHeader.Add(dateP);
                 headerTable.AddCell(leftHeader);
                 
@@ -1008,6 +1025,19 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 }
                 document.Add(table);
+
+                // --- NEW: Class-Wide Skills Evolution Chart ---
+                var allStudentReports = reportsToGenerate.Select(r => r.Progress).ToList();
+                var classSkillsChart = await GetSkillsEvolutionChartAsync(allStudentReports);
+                if (classSkillsChart != null)
+                {
+                    document.Add(new iText.Layout.Element.AreaBreak(iText.Layout.Properties.AreaBreakType.NEXT_PAGE));
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور مهارات الفصل")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(primaryBlue).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(10));
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("متوسط استقرار وإتقان المهارات المتكررة لجميع الطلاب في المجموعة")).SetFont(font).SetFontSize(10).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetMarginBottom(15));
+                    
+                    var classSkillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(classSkillsChart)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER);
+                    document.Add(classSkillsImg.SetMarginBottom(30));
+                }
             }
 
             bool isFirstPage = !request.StudentId.HasValue ? false : true;
@@ -1085,16 +1115,18 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 if (chartBytes != null)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("منحنى التطور الأكاديمي")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(380).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    var img = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(chartBytes)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(img.SetMarginBottom(15));
                 }
 
                 // --- Skills Evolution Chart (New) ---
-                var skillsEvolutionChartBytes = await GetSkillsEvolutionChartAsync(progress);
+                var skillsEvolutionChartBytes = await GetSkillsEvolutionChartAsync(new[] { progress });
                 if (skillsEvolutionChartBytes != null)
                 {
-                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل تطور المهارات المتكررة")).SetFont(font).SetFontSize(10).SetBold().SetFontColor(darkGray).SetMarginBottom(5));
-                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(380).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تطور المهارات المتكررة")).SetFont(font).SetFontSize(12).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY).SetMarginBottom(2));
+                    document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تحليل استقرار وإتقان المهارات التي تم قياسها في أكثر من تقييم")).SetFont(font).SetFontSize(9).SetFontColor(iText.Kernel.Colors.ColorConstants.GRAY).SetMarginBottom(8));
+                    
+                    var skillsImg = new iText.Layout.Element.Image(iText.IO.Image.ImageDataFactory.Create(skillsEvolutionChartBytes)).SetWidth(320).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.CENTER).SetMarginBottom(0);
                     document.Add(skillsImg.SetMarginBottom(20));
                 }
 
