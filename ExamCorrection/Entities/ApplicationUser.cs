@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Entities;
+namespace ExamCorrection.Entities;
 
 public class ApplicationUser : IdentityUser
 {
@@ -13,6 +13,11 @@ public class ApplicationUser : IdentityUser
     public bool IsDisabled { get; set; }
     public override string? Email { get; set; }
     public override string? PhoneNumber { get; set; }
+
+    public long MaxAllowedPages { get; set; }
+    public long UsedPages { get; set; }
+    public DateTime? SubscriptionExpiryUtc { get; set; }
+    public bool IsSubscribed { get; set; }
 
     public List<RefreshToken> RefreshTokens { get; set; } = [];
 }

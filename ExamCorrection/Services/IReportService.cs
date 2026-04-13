@@ -8,8 +8,8 @@ public interface IReportService
     Task<Result<(byte[] FileContent, string FileName)>> ExportStudentsToPdfAsync(IEnumerable<int> classIds);
     Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToExcelAsync();
     Task<Result<(byte[] FileContent, string FileName)>> ExportClassesToPdfAsync();
-    Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId);
-    Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId);
-    Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null);
+    Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId, int? classId = null);
+    Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId, int? classId = null);
+    Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null, int? classId = null);
     Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersZipAsync(int[] examIds, string? teacherId = null);
 }

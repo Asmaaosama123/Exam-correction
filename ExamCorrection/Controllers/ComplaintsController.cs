@@ -27,4 +27,19 @@ public class ComplaintsController(IComplaintService complaintService) : Controll
         var result = await _complaintService.GetAllComplaintsAsync(cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
+
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyComplaints(CancellationToken cancellationToken)
+    {
+        var result = await _complaintService.GetMyComplaintsAsync(cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    [HttpPut("resolve")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Resolve([FromBody] ResolveComplaintRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _complaintService.ResolveComplaintAsync(request, cancellationToken);
+        return result.IsSuccess ? Ok() : BadRequest(result.Error);
+    }
 }

@@ -66,9 +66,9 @@ public class ReportsController(IReportService reportService) : ControllerBase
     }
 
     [HttpGet("report-exam-results-excel")]
-    public async Task<IActionResult> ExportExamResultsToExcel([FromQuery] int examId)
+    public async Task<IActionResult> ExportExamResultsToExcel([FromQuery] int examId, [FromQuery] int? classId = null)
     {
-        var result = await _reportService.ExportExamResultsToExcelAsync(examId);
+        var result = await _reportService.ExportExamResultsToExcelAsync(examId, classId);
 
         if (!result.IsSuccess)
             return BadRequest(result.Error);
@@ -79,9 +79,9 @@ public class ReportsController(IReportService reportService) : ControllerBase
     }
 
     [HttpGet("report-exam-results-pdf")]
-    public async Task<IActionResult> ExportExamResultsToPdf([FromQuery] int examId)
+    public async Task<IActionResult> ExportExamResultsToPdf([FromQuery] int examId, [FromQuery] int? classId = null)
     {
-        var result = await _reportService.ExportExamResultsToPdfAsync(examId);
+        var result = await _reportService.ExportExamResultsToPdfAsync(examId, classId);
 
         if (!result.IsSuccess)
             return BadRequest(result.Error);
@@ -92,9 +92,9 @@ public class ReportsController(IReportService reportService) : ControllerBase
     }
 
     [HttpGet("export-corrected-papers-pdf")]
-    public async Task<IActionResult> ExportCorrectedPapersPdf([FromQuery] int examId, [FromQuery] string? teacherId = null)
+    public async Task<IActionResult> ExportCorrectedPapersPdf([FromQuery] int examId, [FromQuery] string? teacherId = null, [FromQuery] int? classId = null)
     {
-        var result = await _reportService.ExportCorrectedPapersPdfAsync(examId, teacherId);
+        var result = await _reportService.ExportCorrectedPapersPdfAsync(examId, teacherId, classId);
 
         if (!result.IsSuccess)
             return BadRequest(result.Error);

@@ -102,6 +102,9 @@ namespace ExamCorrection.Persistance.Migrations
                     b.Property<bool>("IsDisabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSubscribed")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -112,6 +115,9 @@ namespace ExamCorrection.Persistance.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("MaxAllowedPages")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -133,8 +139,14 @@ namespace ExamCorrection.Persistance.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("SubscriptionExpiryUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
+
+                    b.Property<long>("UsedPages")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
@@ -162,8 +174,10 @@ namespace ExamCorrection.Persistance.Migrations
                             EmailConfirmed = true,
                             FirstName = "Exam Correction",
                             IsDisabled = false,
+                            IsSubscribed = false,
                             LastName = "Admin",
                             LockoutEnabled = false,
+                            MaxAllowedPages = 0L,
                             NormalizedEmail = "ADMIN@EXAM-CORRECTION.COM",
                             NormalizedUserName = "ADMIN@EXAM-CORRECTION.COM",
                             PasswordHash = "AQAAAAIAAYagAAAAEAzqqCiZab+9UI8ZiSWTZGnMyhUd+UXGTuuFp510Tu5pvLjONvV97gNPygyRakW3Ww==",
@@ -171,6 +185,7 @@ namespace ExamCorrection.Persistance.Migrations
                             PhoneNumberConfirmed = false,
                             SecurityStamp = "DE3621A0B83D4CD78E795FA97CCF327E",
                             TwoFactorEnabled = false,
+                            UsedPages = 0L,
                             UserName = "admin@exam-correction.com"
                         });
                 });
@@ -216,8 +231,14 @@ namespace ExamCorrection.Persistance.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AdminResponse")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Message")
                         .IsRequired()
@@ -226,6 +247,9 @@ namespace ExamCorrection.Persistance.Migrations
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -480,6 +504,92 @@ namespace ExamCorrection.Persistance.Migrations
                     b.ToTable("StudentExamPapers");
                 });
 
+            modelBuilder.Entity("ExamCorrection.Entities.SubscriptionPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DurationUnit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("DurationValue")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("MaxAllowedPages")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SubscriptionPlans");
+                });
+
+            modelBuilder.Entity("ExamCorrection.Entities.SubscriptionRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TapChargeId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SubscriptionRequests");
+                });
+
             modelBuilder.Entity("ExamCorrection.Entities.SystemErrorLog", b =>
                 {
                     b.Property<int>("Id")
@@ -516,6 +626,20 @@ namespace ExamCorrection.Persistance.Migrations
                     b.ToTable("SystemErrorLogs");
                 });
 
+            modelBuilder.Entity("ExamCorrection.Entities.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("ExamCorrection.Entities.TeacherExam", b =>
                 {
                     b.Property<int>("Id")
@@ -541,6 +665,34 @@ namespace ExamCorrection.Persistance.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TeacherExams");
+                });
+
+            modelBuilder.Entity("ExamCorrection.Entities.TutorialVideo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("VideoPath")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TutorialVideos");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -809,6 +961,25 @@ namespace ExamCorrection.Persistance.Migrations
                     b.Navigation("Exam");
 
                     b.Navigation("Student");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExamCorrection.Entities.SubscriptionRequest", b =>
+                {
+                    b.HasOne("ExamCorrection.Entities.SubscriptionPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamCorrection.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
 
                     b.Navigation("User");
                 });

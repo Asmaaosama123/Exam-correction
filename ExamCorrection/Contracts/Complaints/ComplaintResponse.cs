@@ -4,5 +4,8 @@ public record ComplaintResponse(
     int Id,
     string Message,
     DateTime CreatedAt,
-    string TeacherName
+    string TeacherName,
+    string? AdminResponse,
+    bool IsResolved,
+    DateTime? ResolvedAt
 );

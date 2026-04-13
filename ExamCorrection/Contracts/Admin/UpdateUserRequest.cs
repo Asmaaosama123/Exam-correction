@@ -4,5 +4,8 @@ public record UpdateUserRequest(
     string FirstName,
     string LastName,
     string? PhoneNumber,
-    bool IsDisabled
+    bool IsDisabled,
+    long MaxAllowedPages = 0,
+    DateTime? SubscriptionExpiryUtc = null,
+    bool IsSubscribed = false
 );

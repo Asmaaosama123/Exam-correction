@@ -10,7 +10,8 @@ public class ExamAiService(
     ApplicationDbContext _context,
     IHttpClientFactory httpClientFactory,
     IConfiguration _configuration,
-    Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment
+    Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment,
+    IUserContext _userContext
 ) : IExamAiService
 {
     private readonly HttpClient _client = httpClientFactory.CreateClient("AI");
@@ -19,6 +20,29 @@ public class ExamAiService(
 
     public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file)
     {
+        // 0️⃣ Check Subscription & Quota
+        var subscriptionRequiredSetting = await _context.SystemSettings.FirstOrDefaultAsync(s => s.Key == "IsSubscriptionRequired");
+        bool isSubscriptionRequired = subscriptionRequiredSetting?.Value?.ToLower() == "true";
+
+        if (isSubscriptionRequired)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == _userContext.UserId);
+            if (user == null) return Result.Failure<ExamResultsDto>(new Error("Auth.UserNotFound", "لم يتم العثور على المستخدم.", StatusCodes.Status401Unauthorized));
+
+            bool isExpired = user.SubscriptionExpiryUtc != null && user.SubscriptionExpiryUtc < DateTime.UtcNow;
+            bool hasNoQuota = user.MaxAllowedPages > 0 && user.UsedPages >= user.MaxAllowedPages;
+
+            if (!user.IsSubscribed && isExpired)
+            {
+                return Result.Failure<ExamResultsDto>(new Error("Subscription.Expired", "انتهت مدة اشتراكك. يرجى التجديد للمتابعة.", StatusCodes.Status403Forbidden));
+            }
+
+            if (hasNoQuota)
+            {
+                return Result.Failure<ExamResultsDto>(new Error("Subscription.NoQuota", "لقد استنفدت عدد الصفحات المسموح بها في باقتك.", StatusCodes.Status403Forbidden));
+            }
+        }
+
         // Save a copy to AI-Dataset for trainer/model training
         try 
         {
@@ -187,6 +211,17 @@ public class ExamAiService(
                     examId,
                     studentExam?.Id
                 ));
+            }
+
+            // 9️⃣ Update Quota if required
+            if (isSubscriptionRequired)
+            {
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == _userContext.UserId);
+                if (user != null && examResults.Count > 0)
+                {
+                    user.UsedPages += examResults.Count;
+                    await _context.SaveChangesAsync();
+                }
             }
 
             return Result.Success(new ExamResultsDto(examResults));

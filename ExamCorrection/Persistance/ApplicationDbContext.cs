@@ -15,10 +15,29 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ExamGoal> ExamGoals { get; set; } = null!;
     public DbSet<Complaint> Complaints { get; set; } = null!;
     public DbSet<SystemErrorLog> SystemErrorLogs { get; set; } = null!;
+    public DbSet<TutorialVideo> TutorialVideos { get; set; } = null!;
+    public DbSet<SystemSetting> SystemSettings { get; set; } = null!;
+    public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; } = null!;
+    public DbSet<SubscriptionRequest> SubscriptionRequests { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        builder.Entity<SystemSetting>()
+            .HasKey(s => s.Key);
+
+        builder.Entity<SubscriptionRequest>()
+            .HasOne(sr => sr.User)
+            .WithMany()
+            .HasForeignKey(sr => sr.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<SubscriptionRequest>()
+            .HasOne(sr => sr.Plan)
+            .WithMany()
+            .HasForeignKey(sr => sr.PlanId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Class>()
             .HasQueryFilter(c => _userContext.IsAdmin || (!c.IsDisabled && c.OwnerId  == _userContext.UserId ))

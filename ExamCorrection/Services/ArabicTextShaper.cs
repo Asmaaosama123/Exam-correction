@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ExamCorrection.Services;
 
@@ -13,7 +14,6 @@ public static class ArabicTextShaper
         { 'إ', new[] { 'إ', 'إ', 'إ', 'إ' } },
         { 'ئ', new[] { 'ئ', 'ئ', 'ﺌ', 'ﺊ' } },
         { 'ا', new[] { 'ا', 'ا', 'ا', 'ا' } },
-        { 'b', new[] { 'ب', 'ب', 'ب', 'ب' } }, // Placeholder for mapping logic if needed, but using direct chars below
         { 'ب', new[] { 'ﺏ', 'ﺑ', 'ﺒ', 'ﺐ' } },
         { 'ت', new[] { 'ﺕ', 'ﺗ', 'ﺘ', 'ﺖ' } },
         { 'ث', new[] { 'ﺙ', 'ﺛ', 'ﺜ', 'ﺚ' } },
@@ -34,17 +34,12 @@ public static class ArabicTextShaper
         { 'غ', new[] { 'ﻍ', 'ﻏ', 'ﻐ', 'ﻎ' } },
         { 'ف', new[] { 'ﻑ', 'ﻓ', 'ﻔ', 'ﻒ' } },
         { 'ق', new[] { 'ﻕ', 'ﻗ', 'ﻘ', 'ﻖ' } },
-        { 'k', new[] { 'ك', 'ك', 'ك', 'ك' } },
         { 'ك', new[] { 'ﻙ', 'ﻛ', 'ﻜ', 'ﻚ' } },
-        { 'l', new[] { 'ل', 'ل', 'ل', 'ل' } },
         { 'ل', new[] { 'ﻝ', 'ﻟ', 'ﻠ', 'ﻞ' } },
-        { 'm', new[] { 'م', 'م', 'م', 'م' } },
         { 'م', new[] { 'ﻡ', 'ﻣ', 'ﻤ', 'ﻢ' } },
-        { 'n', new[] { 'ن', 'ن', 'ن', 'ن' } },
         { 'ن', new[] { 'ﻥ', 'ﻧ', 'ﻨ', 'ﻦ' } },
         { 'ه', new[] { 'ﻩ', 'ﻫ', 'ﻬ', 'ﻪ' } },
         { 'و', new[] { 'ﻭ', 'ﻭ', 'ﻭ', 'ﻭ' } },
-        { 'y', new[] { 'ي', 'ي', 'ي', 'ي' } },
         { 'ي', new[] { 'ﻱ', 'ﻳ', 'ﻴ', 'ﻲ' } },
         { 'ة', new[] { 'ﺓ', 'ﺓ', 'ﺔ', 'ﺔ' } },
         { 'ى', new[] { 'ﻯ', 'ﻯ', 'ﻰ', 'ﻰ' } },
@@ -60,15 +55,15 @@ public static class ArabicTextShaper
     {
         if (string.IsNullOrEmpty(input)) return "";
 
-        // Simple check: if no Arabic characters, return as is (fixes English text reversal)
-        if (!input.Any(c => c >= 0x0600 && c <= 0x06FF))
+        // If no Arabic characters at all, return as is (prevents reversing purely English names)
+        if (!input.Any(c => IsArabic(c)))
             return input;
 
-        var sb = new StringBuilder();
-        // Step 1: Handle Lam-Alef (Special Case)
+        // Step 1: Handle Lam-Alef
         input = HandleLamAlef(input);
 
-        // Step 2: Shape characters
+        // Step 2: Shape individual Arabic characters in logical order
+        var sb = new StringBuilder();
         for (int i = 0; i < input.Length; i++)
         {
             char current = input[i];
@@ -79,9 +74,8 @@ public static class ArabicTextShaper
                 continue;
             }
 
-            // Check previous and next to determine shape
-            bool prevConnects = i > 0 && Connects(input[i - 1]) && !NonConnectors.Contains(input[i - 1]);
-            bool nextConnects = i < input.Length - 1 && Connects(input[i + 1]);
+            bool prevConnects = i > 0 && ArabicMap.ContainsKey(input[i - 1]) && !NonConnectors.Contains(input[i - 1]);
+            bool nextConnects = i < input.Length - 1 && ArabicMap.ContainsKey(input[i + 1]);
 
             if (prevConnects && nextConnects)
                 sb.Append(ArabicMap[current][2]); // Medial
@@ -93,15 +87,79 @@ public static class ArabicTextShaper
                 sb.Append(ArabicMap[current][0]); // Isolated
         }
 
-        // Step 3: Reverse for Bidi LTR rendering (standard PDF behavior without Bidi engine)
-        char[] result = sb.ToString().ToCharArray();
-        Array.Reverse(result);
-        return new string(result);
+        string shapedText = sb.ToString();
+
+        // Step 3: Directional Run Segmentation
+        // We split the string into segments of "Arabic" and "Non-Arabic"
+        var visualRuns = new List<string>();
+        var currentRun = new StringBuilder();
+        bool? currentIsArabic = null;
+
+        foreach (var c in shapedText)
+        {
+            bool isAr = IsArabic(c);
+            bool isLtr = IsLtr(c);
+            bool isNeutral = !isAr && !isLtr;
+
+            if (currentIsArabic == null)
+            {
+                currentIsArabic = isAr;
+                currentRun.Append(c);
+            }
+            else if (isNeutral)
+            {
+                // Neutral characters (space, symbols) stay with the current direction
+                currentRun.Append(c);
+            }
+            else if (isAr == currentIsArabic.Value)
+            {
+                // Same direction as current run
+                currentRun.Append(c);
+            }
+            else
+            {
+                // Direction changed
+                string runText = currentRun.ToString();
+                visualRuns.Add(currentIsArabic.Value ? ReverseString(runText) : runText);
+                
+                currentRun.Clear();
+                currentRun.Append(c);
+                currentIsArabic = isAr;
+            }
+        }
+        
+        if (currentRun.Length > 0)
+        {
+            visualRuns.Add(currentIsArabic!.Value ? ReverseString(currentRun.ToString()) : currentRun.ToString());
+        }
+
+        // Step 4: Reverse the order of runs to achieve overall RTL layout in an LTR engine
+        visualRuns.Reverse();
+        
+        return string.Join("", visualRuns);
     }
 
-    private static bool Connects(char c)
+    private static bool IsArabic(char c)
     {
-        return ArabicMap.ContainsKey(c);
+        return (c >= 0x0600 && c <= 0x06FF) || 
+               (c >= 0x0750 && c <= 0x077F) || 
+               (c >= 0x08A0 && c <= 0x08FF) || 
+               (c >= 0xFB50 && c <= 0xFDFF) || 
+               (c >= 0xFE70 && c <= 0xFEFF);
+    }
+
+    private static bool IsLtr(char c)
+    {
+        // English letters and digits (European and Arabic-Indic)
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
+               (c >= '0' && c <= '9') || (c >= 0x0660 && c <= 0x0669);
+    }
+
+    private static string ReverseString(string s)
+    {
+        char[] charArray = s.ToCharArray();
+        Array.Reverse(charArray);
+        return new string(charArray);
     }
 
     private static string HandleLamAlef(string input)

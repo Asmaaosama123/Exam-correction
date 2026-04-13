@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Services;
+namespace ExamCorrection.Services;
 
 public class ProfileService(UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor) : IProfileService
 {
@@ -23,9 +23,13 @@ public class ProfileService(UserManager<ApplicationUser> userManager, IHttpConte
 
         var response = new CurrentUserResponse(
             user.Id,
-            user.FirstName,
-            user.LastName,
-            userRoles
+            user.FirstName ?? "",
+            user.LastName ?? "",
+            userRoles,
+            user.MaxAllowedPages,
+            user.UsedPages,
+            user.IsSubscribed,
+            user.SubscriptionExpiryUtc
         );
 
         return Result.Success(response);

@@ -86,7 +86,22 @@ app.UseCors("myPolicy");
 // Add global error logging
 app.UseMiddleware<ErrorLoggingMiddleware>();
 
-app.UseStaticFiles(); // Default wwwroot
+var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+provider.Mappings[".mp4"] = "video/mp4";
+provider.Mappings[".mov"] = "video/quicktime";
+provider.Mappings[".avi"] = "video/x-msvideo";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider,
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+        ctx.Context.Response.Headers["Access-Control-Allow-Headers"] = "Origin, X-Requested-With, Content-Type, Accept, Range";
+        ctx.Context.Response.Headers["Access-Control-Allow-Methods"] = "GET, OPTIONS";
+        ctx.Context.Response.Headers["Accept-Ranges"] = "bytes";
+    }
+}); // Default wwwroot
 
 // Safely serve the AI training dataset folder
 var datasetPath = Path.Combine(builder.Environment.WebRootPath, "AI-Dataset");

@@ -7,5 +7,9 @@ public record UserDto(
     string Email,
     string PhoneNumber,
     bool IsDisabled,
+    long MaxAllowedPages = 0,
+    long UsedPages = 0,
+    DateTime? SubscriptionExpiryUtc = null,
+    bool IsSubscribed = false,
     int CorrectedPagesCount = 0
 );

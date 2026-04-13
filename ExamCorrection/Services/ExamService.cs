@@ -552,16 +552,26 @@ public class ExamService : IExamService
 
     public async Task<Result<TeacherExamResponse>> UploadTeacherExamAsync(UploadTeacherExamRequest request)
     {
-        // 1️⃣ التأكد إن ExamId موجود في ExamPage
-        var examPageExists = await _context.Exams
+        // 1️⃣ التأكد إن ExamId موجود ولمن يعود
+        var exam = await _context.Exams
             .IgnoreQueryFilters()
-            .AnyAsync(e => e.Id == request.ExamId);
+            .FirstOrDefaultAsync(e => e.Id == request.ExamId);
 
-        if (!examPageExists)
+        if (exam == null)
         {
             return Result.Failure<TeacherExamResponse>(new Error(
-                "ExamPage.NotFound",
-                $"رقم الامتحان ({request.ExamId}) غير موجود في قاعدة البيانات. يرجى التأكد من إنشاء الامتحان أولاً والحصول على الرقم الصحيح من قائمة الامتحانات.",
+                "Exam.NotFound",
+                $"رقم الامتحان ({request.ExamId}) غير موجود نهائياً في النظام. يرجى إدخال رقم صحيح موجود في قائمة الامتحانات.",
+                StatusCodes.Status400BadRequest
+            ));
+        }
+
+        var currentUserId = _userContext.UserId;
+        if (!string.IsNullOrEmpty(currentUserId) && exam.OwnerId != currentUserId && !_userContext.IsAdmin)
+        {
+            return Result.Failure<TeacherExamResponse>(new Error(
+                "Exam.Unauthorized",
+                $"عذراً، لا يمكنك إعداد نموذج الإجابة لهذا الامتحان لأنه يخص معلماً آخر. يرجى إدخال رقم امتحان يتبع لك.",
                 StatusCodes.Status400BadRequest
             ));
         }

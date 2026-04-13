@@ -131,16 +131,23 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         return Result.Success((ms.ToArray(), fileName));
     }
 
-    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId)
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToExcelAsync(int examId, int? classId = null)
     {
         var exam = await _context.Exams.FindAsync(examId);
         if (exam == null)
             return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
 
-        var results = await _context.StudentExamPapers
+        var query = _context.StudentExamPapers
             .Include(x => x.Student)
             .ThenInclude(x => x.Class)
-            .Where(x => x.ExamId == examId)
+            .Where(x => x.ExamId == examId);
+
+        if (classId.HasValue)
+        {
+            query = query.Where(x => x.Student.ClassId == classId.Value);
+        }
+
+        var results = await query
             .OrderBy(x => x.Student.FullName)
             .ToListAsync();
 
@@ -189,16 +196,23 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         return Result.Success((stream.ToArray(), fileName));
     }
 
-    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId)
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportExamResultsToPdfAsync(int examId, int? classId = null)
     {
         var exam = await _context.Exams.FindAsync(examId);
         if (exam == null)
             return Result.Failure<(byte[] FileContent, string FileName)>(ExamErrors.ExamNotFound);
 
-        var results = await _context.StudentExamPapers
+        var query = _context.StudentExamPapers
             .Include(x => x.Student)
             .ThenInclude(x => x.Class)
-            .Where(x => x.ExamId == examId)
+            .Where(x => x.ExamId == examId);
+
+        if (classId.HasValue)
+        {
+            query = query.Where(x => x.Student.ClassId == classId.Value);
+        }
+
+        var results = await query
             .OrderBy(x => x.Student.FullName)
             .ToListAsync();
 
@@ -384,7 +398,7 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         return Result.Success((ms.ToArray(), fileName));
     }
 
-    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null)
+    public async Task<Result<(byte[] FileContent, string FileName)>> ExportCorrectedPapersPdfAsync(int examId, string? teacherId = null, int? classId = null)
     {
         var exam = await _context.Exams.FindAsync(examId);
         if (exam == null)
@@ -395,6 +409,11 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
             .ThenInclude(x => x.Class)
             .Include(x => x.User)
             .Where(x => x.ExamId == examId && !string.IsNullOrEmpty(x.AnnotatedImageUrl));
+
+        if (classId.HasValue)
+        {
+            query = query.Where(x => x.Student.ClassId == classId.Value);
+        }
 
         if (_userContext.IsAdmin)
         {

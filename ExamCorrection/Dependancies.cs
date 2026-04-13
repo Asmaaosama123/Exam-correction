@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Http.Features; // ضروري لـ FormOptions
 using Microsoft.EntityFrameworkCore;    // ضروري لـ UseSqlServer
 using System.Text;                      // ضروري لـ Encoding
 using Microsoft.IdentityModel.Tokens;   // ضروري لـ TokenValidationParameters
+using System.Net.Http.Headers;
+using ExamCorrection.Settings;
+using ExamCorrection.Services;
 // ... باقي الـ usings
 namespace ExamCorrection;
 
@@ -60,6 +63,18 @@ public static class Dependancies
         services.AddScoped<IExamGoalService, ExamGoalService>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ISystemLogService, SystemLogService>();
+        services.AddScoped<ITutorialVideoService, TutorialVideoService>();
+        services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+        services.Configure<TapSettings>(configuration.GetSection("TapSettings"));
+        services.AddScoped<ITapService, TapService>();
+        services.AddHttpClient<ITapService, TapService>(client =>
+        {
+            var tapConfig = configuration.GetSection("TapSettings").Get<TapSettings>();
+            client.BaseAddress = new Uri(tapConfig?.BaseUrl ?? "https://api.tap.company/v2/");
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
+
         services.AddHttpClient("AI", (sp, c) =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
