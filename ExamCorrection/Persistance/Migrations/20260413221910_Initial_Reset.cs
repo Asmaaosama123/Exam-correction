@@ -687,10 +687,6 @@ namespace ExamCorrection.Persistance.Migrations
                 column: "OwnerId");
         }
 
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            // Empty for baseline
-        }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
