@@ -1,9 +1,15 @@
+using ExamCorrection.Entities;
+using ExamCorrection.Persistance;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
 namespace ExamCorrection.Services;
 
-public class ProfileService(UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor) : IProfileService
+public class ProfileService(UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor, ApplicationDbContext dbContext) : IProfileService
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly ApplicationDbContext _dbContext = dbContext;
 
     public async Task<Result<CurrentUserResponse>> GetCurrentUser()
     {
@@ -21,6 +27,9 @@ public class ProfileService(UserManager<ApplicationUser> userManager, IHttpConte
 
         var userRoles = await _userManager.GetRolesAsync(user);
 
+        var subSetting = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "IsSubscriptionRequired");
+        var isSubscriptionEnabled = subSetting?.Value == "true";
+
         var response = new CurrentUserResponse(
             user.Id,
             user.FirstName ?? "",
@@ -29,7 +38,8 @@ public class ProfileService(UserManager<ApplicationUser> userManager, IHttpConte
             user.MaxAllowedPages,
             user.UsedPages,
             user.IsSubscribed,
-            user.SubscriptionExpiryUtc
+            user.SubscriptionExpiryUtc,
+            isSubscriptionEnabled
         );
 
         return Result.Success(response);

@@ -8,5 +8,6 @@ public record CurrentUserResponse(
     long MaxAllowedPages,
     long UsedPages,
     bool IsSubscribed,
-    DateTime? SubscriptionExpiryUtc
+    DateTime? SubscriptionExpiryUtc,
+    bool IsSubscriptionModeEnabled = true
 );

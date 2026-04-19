@@ -17,6 +17,7 @@ public class TapService(HttpClient httpClient, IOptions<TapSettings> tapSettings
         try
         {
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _settings.SecretKey);
+            _httpClient.DefaultRequestHeaders.Add("lang_code", "ar"); // Force Arabic Checkout Page
 
             var response = await _httpClient.PostAsJsonAsync("charges", request, cancellationToken);
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
