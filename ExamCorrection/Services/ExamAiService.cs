@@ -231,4 +231,31 @@ public class ExamAiService(
             throw;
         }
     }
+
+    public async Task<Result<JsonDocument>> AnalyzeTemplateAsync(IFormFile file)
+    {
+        try
+        {
+            if (file == null) return Result.Failure<JsonDocument>(AiErrors.NoFilesProvided);
+
+            using var content = new MultipartFormDataContent();
+            content.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
+
+            var response = await _client.PostAsync($"{BaseUrl}/analyze-template", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[AI-Analyze-Error] Status: {response.StatusCode}, Body: {errorBody}");
+                return Result.Failure<JsonDocument>(new Error("AI.AnalyzeFailed", "فشل استخراج الأسئلة من النموذج عبر الذكاء الاصطناعي.", (int)response.StatusCode));
+            }
+
+            var data = await response.Content.ReadFromJsonAsync<JsonDocument>();
+            return data != null ? Result.Success(data) : Result.Failure<JsonDocument>(new Error("AI.EmptyResponse", "استجابة فارغة من خدمة الذكاء الاصطناعي.", StatusCodes.Status500InternalServerError));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnalyzeTemplate Exception]: {ex.Message}");
+            return Result.Failure<JsonDocument>(new Error("AI.Exception", $"خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي: {ex.Message}", StatusCodes.Status500InternalServerError));
+        }
+    }
 }

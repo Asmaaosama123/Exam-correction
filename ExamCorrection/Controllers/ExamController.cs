@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Contracts.TeacherExam;
+using ExamCorrection.Contracts.TeacherExam;
 using ExamCorrection.Services;
 
 namespace ExamCorrection.Controllers;
@@ -109,4 +109,21 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
         }
     }
 
+    [HttpPost("analyze-template")]
+    public async Task<IActionResult> AnalyzeTemplate(IFormFile file)
+    {
+        try
+        {
+            var result = await _examAiService.AnalyzeTemplateAsync(file);
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(result.Error);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnalyzeTemplate Exception] {ex}");
+            return Problem(detail: ex.ToString(), title: "Template Analysis Failed Exception");
+        }
+    }
 }
