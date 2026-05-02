@@ -22,7 +22,8 @@ namespace ExamCorrection.Services
        int? examId = null,
        int? classId = null,
        string? searchValue = null,
-       string? teacherId = null)
+       string? teacherId = null,
+       bool? onlyAnonymous = null)
         {
             var query = _context.StudentExamPapers
                 .Include(p => p.Student)
@@ -48,8 +49,25 @@ namespace ExamCorrection.Services
 
             if (!string.IsNullOrEmpty(searchValue))
                 query = query.Where(p =>
-                    p.Student.FullName.Contains(searchValue) ||
-                    p.Exam.Title.Contains(searchValue));
+                    (p.Student != null && p.Student.FullName.Contains(searchValue)) ||
+                    (p.Exam != null && p.Exam.Title.Contains(searchValue)));
+            
+            var anonymousCount = await query.CountAsync(p => 
+                p.StudentId == null || 
+                p.StudentId <= 0 || 
+                p.Student == null || 
+                p.Student.FullName.Contains("مجهول") || 
+                p.Student.FullName.Contains("غير معروف") ||
+                p.Student.FullName.Contains("Unknown"));
+            
+            if (onlyAnonymous == true)
+                query = query.Where(p => 
+                    p.StudentId == null || 
+                    p.StudentId <= 0 || 
+                    p.Student == null || 
+                    p.Student.FullName.Contains("مجهول") || 
+                    p.Student.FullName.Contains("غير معروف") ||
+                    p.Student.FullName.Contains("Unknown"));
 
             var totalCount = await query.CountAsync();
 
@@ -103,12 +121,12 @@ namespace ExamCorrection.Services
                 {
                     Id = p.Id,
                     StudentId = p.StudentId,
-                    StudentName = p.Student.FullName,
+                    StudentName = p.Student?.FullName ?? "طالب مجهول (بدون باركود)",
                     ExamId = p.ExamId,
-                    ExamName = p.Exam.Title,
-                    ExamSubject = p.Exam.Subject,
-                    ClassId = p.Student.ClassId,
-                    ClassName = p.Student.Class.Name,
+                    ExamName = p.Exam?.Title ?? "غير معروف",
+                    ExamSubject = p.Exam?.Subject ?? "غير معروف",
+                    ClassId = p.Student?.ClassId ?? 0,
+                    ClassName = p.Student?.Class?.Name ?? "غير معروف",
                     Grade = p.FinalScore,
                     MaxGrade = p.TotalQuestions,
                     GradedAt = p.GeneratedAt,
@@ -127,38 +145,46 @@ namespace ExamCorrection.Services
                 PageNumber = pageNumber,
                 TotalCount = totalCount,
                 TotalPages = totalPages,
+                AnonymousCount = anonymousCount,
                 HasNextPage = pageNumber < totalPages,
                 HasPreviousPage = pageNumber > 1
             };
         }
 
-        public async Task<bool> UpdateManualGradingAsync(int paperId, List<ManualCorrectionDto> corrections)
+        public async Task<bool> UpdateManualGradingAsync(int paperId, List<ManualCorrectionDto> corrections, int? studentId = null)
         {
             var paper = await _context.StudentExamPapers.FindAsync(paperId);
-            if (paper == null || string.IsNullOrEmpty(paper.QuestionDetailsJson))
+            if (paper == null)
                 return false;
 
-            var details = JsonSerializer.Deserialize<List<QuestionDetailDto>>(paper.QuestionDetailsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (details == null) return false;
-
-            foreach (var corr in corrections)
+            if (studentId.HasValue)
             {
-                var target = details.FirstOrDefault(d => d.Id == corr.QuestionId);
-                if (target != null)
-                {
-                    target.Ok = corr.IsCorrect;
-                    if (!string.IsNullOrEmpty(corr.SelectedAnswer))
-                    {
-                        target.Pred = corr.SelectedAnswer;
-                    }
-                    // If manually marked as correct, we can also set pred to gt or just keep it blank but set ok=true
-                    // The business logic here: Teacher says "this is correct" -> ok = true
-                }
+                paper.StudentId = studentId.Value;
             }
 
-            // Recalculate FinalScore
-            paper.FinalScore = details.Where(d => d.Ok).Sum(d => d.Points);
-            paper.QuestionDetailsJson = JsonSerializer.Serialize(details);
+            if (!string.IsNullOrEmpty(paper.QuestionDetailsJson))
+            {
+                var details = JsonSerializer.Deserialize<List<QuestionDetailDto>>(paper.QuestionDetailsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (details != null)
+                {
+                    foreach (var corr in corrections)
+                    {
+                        var target = details.FirstOrDefault(d => d.Id == corr.QuestionId);
+                        if (target != null)
+                        {
+                            target.Ok = corr.IsCorrect;
+                            if (!string.IsNullOrEmpty(corr.SelectedAnswer))
+                            {
+                                target.Pred = corr.SelectedAnswer;
+                            }
+                        }
+                    }
+
+                    paper.FinalScore = details.Where(d => d.Ok).Sum(d => d.Points);
+                    paper.QuestionDetailsJson = JsonSerializer.Serialize(details);
+                    paper.GeneratedAt = DateTime.Now; // Update time to move to top of table
+                }
+            }
 
             await _context.SaveChangesAsync();
             return true;

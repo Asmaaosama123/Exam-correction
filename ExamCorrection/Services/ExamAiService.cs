@@ -18,7 +18,7 @@ public class ExamAiService(
     private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment = _webHostEnvironment;
     private string BaseUrl => _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:8000";
 
-    public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file)
+    public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file, int? examId = null)
     {
         // 0️⃣ Check Subscription & Quota
         var subscriptionRequiredSetting = await _context.SystemSettings.FirstOrDefaultAsync(s => s.Key == "IsSubscriptionRequired");
@@ -71,31 +71,50 @@ public class ExamAiService(
         {
             if (file == null) return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);
 
-            // 1️⃣ Scan barcode to get ExamId
-            using var scanContent = new MultipartFormDataContent();
-            scanContent.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
-            var scanResponse = await _client.PostAsync($"{BaseUrl}/scan-barcode", scanContent);
-            if (!scanResponse.IsSuccessStatusCode) return Result.Failure<ExamResultsDto>(AiErrors.ScanFailed);
+            // 1️⃣ Get ExamId (Manual or from Barcode)
+            int finalExamId = 0;
+            if (examId.HasValue)
+            {
+                finalExamId = examId.Value;
+            }
+            else
+            {
+                using var scanContent = new MultipartFormDataContent();
+                scanContent.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
+                var scanResponse = await _client.PostAsync($"{BaseUrl}/scan-barcode", scanContent);
+                if (!scanResponse.IsSuccessStatusCode) return Result.Failure<ExamResultsDto>(AiErrors.ScanFailed);
 
-            var scanData = await scanResponse.Content.ReadFromJsonAsync<ScanBarcodeResponse>();
-            if (scanData == null || !scanData.Barcodes.Any()) return Result.Failure<ExamResultsDto>(AiErrors.NoBarcodesFound);
+                var scanData = await scanResponse.Content.ReadFromJsonAsync<ScanBarcodeResponse>();
+                if (scanData == null || !scanData.Barcodes.Any()) return Result.Failure<ExamResultsDto>(AiErrors.NoBarcodesFound);
 
-            var examIdStr = scanData.Barcodes.First().ExamId;
-            if (!int.TryParse(examIdStr, out int examId)) return Result.Failure<ExamResultsDto>(new Error("ParsingError", "Invalid Exam ID format", null));
+                var examIdStr = scanData.Barcodes.First().ExamId;
+                if (!int.TryParse(examIdStr, out int parsedExamId)) return Result.Failure<ExamResultsDto>(new Error("ParsingError", "Invalid Exam ID format", null));
+                finalExamId = parsedExamId;
+            }
 
             // 2️⃣ Fetch Teacher Exam Data
-            var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == examId);
-            if (teacherExam == null) return Result.Failure<ExamResultsDto>(new Error("AI.ExamNotFoundInDb", $"لم يتم العثور على نموذج إجابة للامتحان رقم ({examId}) في قاعدة البيانات. يرجى التأكد من حفظ نموذج المعلم لهذا الامتحان أولاً.", StatusCodes.Status400BadRequest));
+            var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == finalExamId);
+            if (teacherExam == null) return Result.Failure<ExamResultsDto>(new Error("AI.ExamNotFoundInDb", $"لم يتم العثور على نموذج إجابة للامتحان رقم ({finalExamId}) في قاعدة البيانات. يرجى التأكد من حفظ نموذج المعلم لهذا الامتحان أولاً.", StatusCodes.Status400BadRequest));
 
             // 3️⃣ Prepare Clean JSON for AI (Remove Points)
             string cleanedJson = teacherExam.QuestionsJson;
             try {
                 var jsonNode = JsonNode.Parse(teacherExam.QuestionsJson);
                 if (jsonNode is JsonObject rootObj && rootObj["questions"] is JsonArray questionsNode) {
+                    if (questionsNode.Count == 0)
+                    {
+                        return Result.Failure<ExamResultsDto>(new Error("AI.EmptyTemplate", "هذا الاختبار لا يحتوي على أي أسئلة معرفة في نموذج الإجابة. يرجى الذهاب لصفحة 'إعداد النموذج' ورسم مربعات الإجابات أولاً.", StatusCodes.Status400BadRequest));
+                    }
                     foreach (var q in questionsNode) { if (q is JsonObject qObj) qObj.Remove("points"); }
                     cleanedJson = jsonNode.ToJsonString();
                 }
-            } catch { /* Fallback to original if cleaning fails */ }
+                else 
+                {
+                     return Result.Failure<ExamResultsDto>(new Error("AI.InvalidTemplate", "تنسيق نموذج الإجابة غير صحيح. يرجى إعادة إعداد النموذج.", StatusCodes.Status400BadRequest));
+                }
+            } catch { 
+                return Result.Failure<ExamResultsDto>(new Error("AI.TemplateParseError", "حدث خطأ أثناء قراءة نموذج الإجابة. يرجى التأكد من حفظ النموذج بشكل صحيح.", StatusCodes.Status400BadRequest));
+            }
 
             // 4️⃣ Call MCQ Correction API
             using var mcqContent = new MultipartFormDataContent();
@@ -103,10 +122,17 @@ public class ExamAiService(
             mcqContent.Add(new StringContent(cleanedJson), "model_config");
 
             var mcqResponse = await _client.PostAsync($"{BaseUrl}/mcq", mcqContent);
-            if (!mcqResponse.IsSuccessStatusCode) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
+            if (!mcqResponse.IsSuccessStatusCode) {
+                var errorContent = await mcqResponse.Content.ReadAsStringAsync();
+                Console.WriteLine($"[AI-MCQ-Error] Status: {mcqResponse.StatusCode}, Body: {errorContent}");
+                return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
+            }
 
-            var mcqData = await mcqResponse.Content.ReadFromJsonAsync<McqResponse>();
-            if (mcqData == null) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
+            var responseBody = await mcqResponse.Content.ReadAsStringAsync();
+            Console.WriteLine($"[AI-MCQ-Debug] Raw Response: {responseBody}");
+
+            var mcqData = JsonSerializer.Deserialize<McqResponse>(responseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (mcqData == null || mcqData.Results == null) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
             // 5️⃣ Build Teacher's Data Map (Source of Truth)
             var questionDataMap = new Dictionary<string, (float Points, List<string>? Options, string? Type)>(StringComparer.OrdinalIgnoreCase);
@@ -143,10 +169,11 @@ public class ExamAiService(
             var examResults = new List<McqResultDto>();
             foreach (var res in mcqData.Results)
             {
-                int studentId = 0;
+                int? studentId = null;
                 // Student identification logic (Simplified for brevity)
                 if (res.StudentInfo != null && int.TryParse(res.StudentInfo.StudentId, out int sId)) studentId = sId;
-                if (studentId == 0) continue;
+                // Removed the check that skips unknown students to allow correction without student barcode
+
 
                 float recalculatedStudentScore = 0;
                 var enrichedDetails = new List<QuestionResultDto>();
@@ -177,22 +204,30 @@ public class ExamAiService(
                 }
 
                 // 7️⃣ Save to Database
-                var studentExam = await _context.StudentExamPapers.IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
+                var studentExam = studentId != null 
+                    ? await _context.StudentExamPapers.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(s => s.ExamId == finalExamId && s.StudentId == studentId)
+                    : await _context.StudentExamPapers.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(s => s.ExamId == finalExamId && s.StudentId == null && s.GeneratedPdfPath == res.Filename);
 
                 if (studentExam != null) {
                     studentExam.FinalScore = recalculatedStudentScore;
                     studentExam.TotalQuestions = totalExamPointsByTeacher;
                     studentExam.QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails);
                     studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
+                    studentExam.GeneratedAt = DateTime.Now; // Update time to move to top of table
+                    studentExam.GeneratedPdfPath = res.Filename; // Ensure correct page/file reference
+                    // Ensure the paper is owned by the person correcting it
+                    studentExam.OwnerId = _userContext.UserId ?? studentExam.OwnerId;
                 } else {
-                    var examObj = await _context.Exams.FindAsync(examId);
+                    var examObj = await _context.Exams.FindAsync(finalExamId);
                     if (examObj != null) {
                         studentExam = new StudentExamPaper {
-                            ExamId = examId, StudentId = studentId, OwnerId = examObj.OwnerId,
+                            ExamId = finalExamId, StudentId = studentId, 
+                            OwnerId = _userContext.UserId ?? examObj.OwnerId, // Use current user if available
                             FinalScore = recalculatedStudentScore, TotalQuestions = totalExamPointsByTeacher,
                             QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails),
-                            GeneratedAt = DateTime.Now, GeneratedPdfPath = file.FileName,
+                            GeneratedAt = DateTime.Now, GeneratedPdfPath = res.Filename,
                             AnnotatedImageUrl = res.AnnotatedImageUrl
                         };
                         _context.StudentExamPapers.Add(studentExam);
@@ -202,13 +237,13 @@ public class ExamAiService(
                 await _context.SaveChangesAsync();
 
                 // 8️⃣ Prepare Result for UI
-                var student = await _context.Students.FindAsync(studentId);
+                var student = studentId != null ? await _context.Students.FindAsync(studentId) : null;
                 examResults.Add(new McqResultDto(
                     res.Filename,
-                    new StudentInfoDto(studentId.ToString(), student?.FullName ?? "Unknown"),
+                    new StudentInfoDto(studentId?.ToString() ?? "0", student?.FullName ?? "طالب مجهول (بدون باركود)"),
                     new McqDetailsDto(recalculatedStudentScore, totalExamPointsByTeacher, enrichedDetails),
                     res.AnnotatedImageUrl.StartsWith("http") ? res.AnnotatedImageUrl : $"{BaseUrl}/{res.AnnotatedImageUrl.TrimStart('/')}",
-                    examId,
+                    finalExamId,
                     studentExam?.Id
                 ));
             }

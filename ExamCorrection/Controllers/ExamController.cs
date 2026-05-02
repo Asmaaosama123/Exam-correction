@@ -68,7 +68,7 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
     }
     [HttpPost("process")]
     [RequestSizeLimit(2147483648)] // 2GB
-    public async Task<IActionResult> Process(IFormFile file)
+    public async Task<IActionResult> Process([FromForm] IFormFile file, [FromForm] int? templateId)
     {
         try 
         {
@@ -96,7 +96,7 @@ public class ExamController(IExamService examService,IExamAiService examAiServic
                 }
             }
 
-            var result = await _examAiService.ProcessExamAsync(file);
+            var result = await _examAiService.ProcessExamAsync(file, templateId);
 
             return result.IsSuccess
                 ? Ok(result.Value)

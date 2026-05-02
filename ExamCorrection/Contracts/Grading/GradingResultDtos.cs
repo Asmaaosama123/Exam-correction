@@ -5,7 +5,7 @@ namespace ExamCorrection.Contracts.Grading
     public class GradingResultDto
     {
         public int Id { get; set; }
-        public int StudentId { get; set; }
+        public int? StudentId { get; set; }
         public string StudentName { get; set; } = string.Empty;
         public int ExamId { get; set; }
         public string ExamName { get; set; } = string.Empty;
@@ -60,6 +60,7 @@ namespace ExamCorrection.Contracts.Grading
         public int PageNumber { get; set; }
         public int TotalCount { get; set; }
         public int TotalPages { get; set; }
+        public int AnonymousCount { get; set; }
         public bool HasNextPage { get; set; }
         public bool HasPreviousPage { get; set; }
     }

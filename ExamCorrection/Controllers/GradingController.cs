@@ -23,17 +23,24 @@ namespace ExamCorrection.Controllers
             int? examId = null,
             int? classId = null,
             string? searchValue = null,
-            string? teacherId = null)
+            string? teacherId = null,
+            bool? onlyAnonymous = null)
         {
-            var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue, teacherId);
+            var results = await _gradingService.GetGradingResultsAsync(pageNumber, pageSize, examId, classId, searchValue, teacherId, onlyAnonymous);
             return Ok(results);
         }
 
         [HttpPost("{id}/manual-update")]
-        public async Task<IActionResult> UpdateManualGrading(int id, [FromBody] List<ManualCorrectionDto> corrections)
+        public async Task<IActionResult> UpdateManualGrading(int id, [FromBody] ManualUpdateRequest request)
         {
-            var success = await _gradingService.UpdateManualGradingAsync(id, corrections);
+            var success = await _gradingService.UpdateManualGradingAsync(id, request.Corrections, request.StudentId);
             return success ? Ok() : BadRequest("تعذر تحديث البيانات");
         }
+    }
+
+    public class ManualUpdateRequest
+    {
+        public List<ManualCorrectionDto> Corrections { get; set; } = new();
+        public int? StudentId { get; set; }
     }
 }

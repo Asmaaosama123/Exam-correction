@@ -4,7 +4,7 @@ public class StudentExamPaper
 {
     public int Id { get; set; }
     public int ExamId { get; set; }
-    public int StudentId { get; set; }
+    public int? StudentId { get; set; }
     public string OwnerId { get; set; } = string.Empty;
     public string GeneratedPdfPath { get; set; } = string.Empty;
     public DateTime GeneratedAt { get; set; } = DateTime.Now;
