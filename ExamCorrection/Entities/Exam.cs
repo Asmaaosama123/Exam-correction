@@ -13,6 +13,7 @@ public class Exam
     public string NameMarkData { get; set; } = string.Empty;
     public string FiducialsData { get; set; } = string.Empty;
     public string OwnerId { get; set; } = string.Empty;
+    public bool IsBarcode { get; set; } = true;
 
     public ApplicationUser? User { get; set; }
     public ICollection<StudentExamPaper> StudentPapers { get; set; } = [];

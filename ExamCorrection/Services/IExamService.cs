@@ -1,4 +1,4 @@
-﻿using ExamCorrection.Contracts.TeacherExam;
+using ExamCorrection.Contracts.TeacherExam;
 using ExamCorrection.Contracts.AI;
 
 namespace ExamCorrection.Services;

@@ -552,28 +552,55 @@ public class ExamService : IExamService
 
     public async Task<Result<TeacherExamResponse>> UploadTeacherExamAsync(UploadTeacherExamRequest request)
     {
-        // 1️⃣ التأكد إن ExamId موجود ولمن يعود
-        var exam = await _context.Exams
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(e => e.Id == request.ExamId);
-
-        if (exam == null)
+        try 
         {
-            return Result.Failure<TeacherExamResponse>(new Error(
-                "Exam.NotFound",
-                $"رقم الامتحان ({request.ExamId}) غير موجود نهائياً في النظام. يرجى إدخال رقم صحيح موجود في قائمة الامتحانات.",
-                StatusCodes.Status400BadRequest
-            ));
+            Exam exam;
+            var currentUserId = _userContext.UserId;
+
+        // 1️⃣ التعامل مع الـ ExamId (تحديث امتحان موجود أو إنشاء جديد)
+        if (request.ExamId.HasValue && request.ExamId.Value > 0)
+        {
+            exam = await _context.Exams
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(e => e.Id == request.ExamId.Value);
+
+            if (exam == null)
+            {
+                return Result.Failure<TeacherExamResponse>(new Error(
+                    "Exam.NotFound",
+                    $"رقم الامتحان ({request.ExamId.Value}) غير موجود نهائياً في النظام. يرجى إدخال رقم صحيح موجود في قائمة الامتحانات.",
+                    StatusCodes.Status400BadRequest
+                ));
+            }
+
+            if (!string.IsNullOrEmpty(currentUserId) && exam.OwnerId != currentUserId && !_userContext.IsAdmin)
+            {
+                return Result.Failure<TeacherExamResponse>(new Error(
+                    "Exam.Unauthorized",
+                    $"عذراً، لا يمكنك إعداد نموذج الإجابة لهذا الامتحان لأنه يخص معلماً آخر. يرجى إدخال رقم امتحان يتبع لك.",
+                    StatusCodes.Status400BadRequest
+                ));
+            }
         }
-
-        var currentUserId = _userContext.UserId;
-        if (!string.IsNullOrEmpty(currentUserId) && exam.OwnerId != currentUserId && !_userContext.IsAdmin)
+        else
         {
-            return Result.Failure<TeacherExamResponse>(new Error(
-                "Exam.Unauthorized",
-                $"عذراً، لا يمكنك إعداد نموذج الإجابة لهذا الامتحان لأنه يخص معلماً آخر. يرجى إدخال رقم امتحان يتبع لك.",
-                StatusCodes.Status400BadRequest
-            ));
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                return Result.Failure<TeacherExamResponse>(new Error("Auth.Unauthorized", "User not authenticated", StatusCodes.Status401Unauthorized));
+            }
+
+            // إنشاء امتحان جديد للامتحانات بدون باركود
+            exam = new Exam
+            {
+                Title = request.Title ?? "امتحان جديد",
+                Subject = request.Subject ?? "عام",
+                IsBarcode = request.IsBarcode ?? false,
+                OwnerId = currentUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Exams.Add(exam);
+            await _context.SaveChangesAsync(); // لحجز الـ ID
         }
 
         // 2️⃣ التحقق من الملف
@@ -606,6 +633,36 @@ public class ExamService : IExamService
         using var stream = new FileStream(filePath, FileMode.Create);
         await request.File.CopyToAsync(stream);
 
+        // تحديث عدد صفحات الامتحان
+        if (request.PageCount.HasValue && request.PageCount.Value > 0)
+        {
+            exam.NumberOfPages = request.PageCount.Value;
+        }
+        else if (ext == ".pdf")
+        {
+            try
+            {
+                using var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(filePath));
+                exam.NumberOfPages = pdf.GetNumberOfPages();
+            }
+            catch (Exception ex)
+            {
+                exam.NumberOfPages = 1;
+                string logPath2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai_debug.log");
+                File.AppendAllText(logPath2, $"[{DateTime.Now}] ERROR reading PDF pages: {ex.Message}\n");
+            }
+        }
+        else
+        {
+            exam.NumberOfPages = 1;
+        }
+
+        exam.PdfPath = $"Uploads/{fileName}"; // تحديث المسار في كيان الامتحان أيضاً
+        _context.Update(exam);
+
+        string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai_debug.log");
+        File.AppendAllText(logPath, $"[{DateTime.Now}] Template Uploaded: ExamId={exam.Id}, PagesDetected={exam.NumberOfPages}, Path={exam.PdfPath}\n");
+
         // 4️⃣ Insert أو Update
         var teacherExam = await _context.TeacherExams
             .FirstOrDefaultAsync(t => t.ExamId == request.ExamId);
@@ -614,7 +671,7 @@ public class ExamService : IExamService
         {
             teacherExam = new TeacherExam
             {
-                ExamId = request.ExamId,
+                ExamId = exam.Id,
                 PdfPath = filePath,
                 QuestionsJson = request.QuestionsJson
             };
@@ -631,10 +688,33 @@ public class ExamService : IExamService
 
         // 5️⃣ Response
         return Result.Success(new TeacherExamResponse(
-            teacherExam.ExamId,
+            exam.Id,
             $"Uploads/{fileName}",
             teacherExam.QuestionsJson
         ));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UploadTeacherExamAsync Error] {ex}");
+            
+            string friendlyMessage = "حدث خطأ غير متوقع أثناء حفظ نموذج الاختبار. يرجى التأكد من البيانات والمحاولة مرة أخرى.";
+            
+            // التحقق من الأخطاء الشائعة وترجمتها للعربية
+            if (ex.ToString().Contains("UNIQUE") || ex.ToString().Contains("Duplicate"))
+            {
+                friendlyMessage = "عذراً، اسم هذا الاختبار موجود بالفعل لديك لمادة دراسية سابقة. يرجى اختيار اسم مختلف أو تعديل الاختبار الحالي.";
+            }
+            else if (ex.ToString().Contains("IsBarcode"))
+            {
+                friendlyMessage = "عذراً، حدث خطأ تقني في بنية قاعدة البيانات (IsBarcode). يرجى إبلاغ الدعم الفني.";
+            }
+            else if (ex.ToString().Contains("NullReferenceException"))
+            {
+                friendlyMessage = "توجد بيانات مفقودة في الطلب. يرجى التأكد من ملء جميع الحقول المطلوبة.";
+            }
+
+            return Result.Failure<TeacherExamResponse>(new Error("System.Exception", friendlyMessage, 500));
+        }
     }
 
     private Point MapVisualToPage(float visualX, float visualY, float visualWidth, float visualHeight, int rotation, iText.Kernel.Geom.Rectangle cropBox)

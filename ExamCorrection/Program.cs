@@ -25,6 +25,13 @@ using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<ExamCorrection.Entities.ApplicationRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ExamCorrection.Entities.ApplicationUser>>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ExamCorrection.Persistance.ApplicationDbContext>();
+    
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw("ALTER TABLE Exams ADD IsBarcode BIT NOT NULL DEFAULT 1;");
+    }
+    catch { /* Ignore if it already exists */ }
 
     // 1. Ensure Roles Exist
     string[] roles = ["Admin", "AITrainer", "Teacher"];
