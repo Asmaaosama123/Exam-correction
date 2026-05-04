@@ -58,7 +58,8 @@ namespace ExamCorrection.Services
                 p.Student == null || 
                 p.Student.FullName.Contains("مجهول") || 
                 p.Student.FullName.Contains("غير معروف") ||
-                p.Student.FullName.Contains("Unknown"));
+                p.Student.FullName.Contains("Unknown") ||
+                p.Student.FullName.Contains("(بدون باركود)"));
             
             if (onlyAnonymous == true)
                 query = query.Where(p => 
@@ -67,7 +68,8 @@ namespace ExamCorrection.Services
                     p.Student == null || 
                     p.Student.FullName.Contains("مجهول") || 
                     p.Student.FullName.Contains("غير معروف") ||
-                    p.Student.FullName.Contains("Unknown"));
+                    p.Student.FullName.Contains("Unknown") ||
+                    p.Student.FullName.Contains("(بدون باركود)"));
 
             var totalCount = await query.CountAsync();
 

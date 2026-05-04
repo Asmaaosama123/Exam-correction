@@ -31,5 +31,11 @@ public record QuestionResultDto(
     List<string>? Options = null,
 
     [property: JsonPropertyName("question_type")]
-    string? QuestionType = null
+    string? QuestionType = null,
+
+    [property: JsonPropertyName("max_grade")]
+    float? MaxGrade = null,
+
+    [property: JsonPropertyName("student_score")]
+    float? StudentScore = null
 );

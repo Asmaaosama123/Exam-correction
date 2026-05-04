@@ -18,7 +18,7 @@ public class ExamAiService(
     private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _webHostEnvironment = _webHostEnvironment;
     private string BaseUrl => _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:8000";
 
-    public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file, int? examId = null)
+    public async Task<Result<ExamResultsDto>> ProcessExamAsync(IFormFile file, int? templateId = null)
     {
         // 0️⃣ Check Subscription & Quota
         var subscriptionRequiredSetting = await _context.SystemSettings.FirstOrDefaultAsync(s => s.Key == "IsSubscriptionRequired");
@@ -71,11 +71,11 @@ public class ExamAiService(
         {
             if (file == null) return Result.Failure<ExamResultsDto>(AiErrors.NoFilesProvided);
 
-            // 1️⃣ Get ExamId (Manual or from Barcode)
-            int finalExamId = 0;
-            if (examId.HasValue)
+            // 1️⃣ Scan barcode to get ExamId (or use templateId)
+            int examId = 0;
+            if (templateId.HasValue && templateId.Value > 0)
             {
-                finalExamId = examId.Value;
+                examId = templateId.Value;
             }
             else
             {
@@ -88,33 +88,33 @@ public class ExamAiService(
                 if (scanData == null || !scanData.Barcodes.Any()) return Result.Failure<ExamResultsDto>(AiErrors.NoBarcodesFound);
 
                 var examIdStr = scanData.Barcodes.First().ExamId;
-                if (!int.TryParse(examIdStr, out int parsedExamId)) return Result.Failure<ExamResultsDto>(new Error("ParsingError", "Invalid Exam ID format", null));
-                finalExamId = parsedExamId;
+                if (!int.TryParse(examIdStr, out examId)) return Result.Failure<ExamResultsDto>(new Error("ParsingError", "Invalid Exam ID format", null));
             }
 
             // 2️⃣ Fetch Teacher Exam Data
-            var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == finalExamId);
-            if (teacherExam == null) return Result.Failure<ExamResultsDto>(new Error("AI.ExamNotFoundInDb", $"لم يتم العثور على نموذج إجابة للامتحان رقم ({finalExamId}) في قاعدة البيانات. يرجى التأكد من حفظ نموذج المعلم لهذا الامتحان أولاً.", StatusCodes.Status400BadRequest));
+            var teacherExam = await _context.TeacherExams.FirstOrDefaultAsync(x => x.ExamId == examId);
+            if (teacherExam == null) return Result.Failure<ExamResultsDto>(new Error("AI.ExamNotFoundInDb", $"لم يتم العثور على نموذج إجابة للامتحان رقم ({examId}) في قاعدة البيانات. يرجى التأكد من حفظ نموذج المعلم لهذا الامتحان أولاً.", StatusCodes.Status400BadRequest));
+            var examObj = await _context.Exams.FindAsync(examId);
 
             // 3️⃣ Prepare Clean JSON for AI (Remove Points)
             string cleanedJson = teacherExam.QuestionsJson;
             try {
                 var jsonNode = JsonNode.Parse(teacherExam.QuestionsJson);
                 if (jsonNode is JsonObject rootObj && rootObj["questions"] is JsonArray questionsNode) {
-                    if (questionsNode.Count == 0)
-                    {
-                        return Result.Failure<ExamResultsDto>(new Error("AI.EmptyTemplate", "هذا الاختبار لا يحتوي على أي أسئلة معرفة في نموذج الإجابة. يرجى الذهاب لصفحة 'إعداد النموذج' ورسم مربعات الإجابات أولاً.", StatusCodes.Status400BadRequest));
-                    }
                     foreach (var q in questionsNode) { if (q is JsonObject qObj) qObj.Remove("points"); }
+                    
+                    if (examObj != null && examObj.NumberOfPages > 0)
+                    {
+                        rootObj["number_of_pages"] = examObj.NumberOfPages;
+                    }
+                    else
+                    {
+                        rootObj["number_of_pages"] = 1;
+                    }
+
                     cleanedJson = jsonNode.ToJsonString();
                 }
-                else 
-                {
-                     return Result.Failure<ExamResultsDto>(new Error("AI.InvalidTemplate", "تنسيق نموذج الإجابة غير صحيح. يرجى إعادة إعداد النموذج.", StatusCodes.Status400BadRequest));
-                }
-            } catch { 
-                return Result.Failure<ExamResultsDto>(new Error("AI.TemplateParseError", "حدث خطأ أثناء قراءة نموذج الإجابة. يرجى التأكد من حفظ النموذج بشكل صحيح.", StatusCodes.Status400BadRequest));
-            }
+            } catch { /* Fallback to original if cleaning fails */ }
 
             // 4️⃣ Call MCQ Correction API
             using var mcqContent = new MultipartFormDataContent();
@@ -122,17 +122,10 @@ public class ExamAiService(
             mcqContent.Add(new StringContent(cleanedJson), "model_config");
 
             var mcqResponse = await _client.PostAsync($"{BaseUrl}/mcq", mcqContent);
-            if (!mcqResponse.IsSuccessStatusCode) {
-                var errorContent = await mcqResponse.Content.ReadAsStringAsync();
-                Console.WriteLine($"[AI-MCQ-Error] Status: {mcqResponse.StatusCode}, Body: {errorContent}");
-                return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
-            }
+            if (!mcqResponse.IsSuccessStatusCode) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
-            var responseBody = await mcqResponse.Content.ReadAsStringAsync();
-            Console.WriteLine($"[AI-MCQ-Debug] Raw Response: {responseBody}");
-
-            var mcqData = JsonSerializer.Deserialize<McqResponse>(responseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (mcqData == null || mcqData.Results == null) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
+            var mcqData = await mcqResponse.Content.ReadFromJsonAsync<McqResponse>();
+            if (mcqData == null) return Result.Failure<ExamResultsDto>(AiErrors.McqFailed);
 
             // 5️⃣ Build Teacher's Data Map (Source of Truth)
             var questionDataMap = new Dictionary<string, (float Points, List<string>? Options, string? Type)>(StringComparer.OrdinalIgnoreCase);
@@ -169,11 +162,46 @@ public class ExamAiService(
             var examResults = new List<McqResultDto>();
             foreach (var res in mcqData.Results)
             {
-                int? studentId = null;
+                int studentId = 0;
                 // Student identification logic (Simplified for brevity)
-                if (res.StudentInfo != null && int.TryParse(res.StudentInfo.StudentId, out int sId)) studentId = sId;
-                // Removed the check that skips unknown students to allow correction without student barcode
+                if (res.StudentInfo != null && !string.IsNullOrEmpty(res.StudentInfo.StudentId))
+                {
+                     if (int.TryParse(res.StudentInfo.StudentId, out int sId)) studentId = sId;
+                }
+                
+                bool isUnknownStudent = false;
+                if (studentId == 0)
+                {
+                    // Fallback: Assign to an "Unknown Student" in a dedicated class
+                    var unknownClassName = "أوراق بدون باركود";
+                    var teacherClass = await _context.Classes.FirstOrDefaultAsync(c => c.OwnerId == _userContext.UserId && c.Name == unknownClassName);
+                    
+                    if (teacherClass == null)
+                    {
+                        teacherClass = new Class
+                        {
+                            Name = unknownClassName,
+                            OwnerId = _userContext.UserId
+                        };
+                        _context.Classes.Add(teacherClass);
+                        await _context.SaveChangesAsync();
+                    }
 
+                    var studentsCount = await _context.Students.Where(s => s.ClassId == teacherClass.Id).CountAsync();
+                    var newStudentName = $"طالب {studentsCount + 1} (بدون باركود)";
+                    
+                    var unknownStudent = new Student
+                    {
+                        FullName = newStudentName,
+                        ClassId = teacherClass.Id,
+                        OwnerId = _userContext.UserId
+                    };
+                    _context.Students.Add(unknownStudent);
+                    await _context.SaveChangesAsync();
+                    
+                    studentId = unknownStudent.Id;
+                    isUnknownStudent = true;
+                }
 
                 float recalculatedStudentScore = 0;
                 var enrichedDetails = new List<QuestionResultDto>();
@@ -184,50 +212,83 @@ public class ExamAiService(
                     continue;
                 }
 
+                float thisStudentMaxQuestions = totalExamPointsByTeacher;
+
                 foreach (var detail in res.Details.Details)
                 {
-                    // الحتة دي هي اللي بتضمن إننا نرجع لدرجة المعلم ونبص على الاختيارات
                     string detailId = detail.Id?.Trim().ToLower().TrimStart('q', '0') ?? "";
                     
                     if (questionDataMap.TryGetValue(detailId, out var qData)) {
-                        if (detail.IsCorrect) recalculatedStudentScore += qData.Points;
-                        enrichedDetails.Add(detail with { 
-                            Points = qData.Points, 
-                            Options = qData.Options,
-                            QuestionType = qData.Type,
-                            Type = qData.Type ?? detail.Type
-                        });
+                        bool teacherProvidedPoints = qData.Points > 0;
+                        
+                        if (detail.Method == "gemini" && !teacherProvidedPoints && detail.MaxGrade.HasValue) 
+                        {
+                            thisStudentMaxQuestions += detail.MaxGrade.Value;
+                            float scoreEarned = detail.StudentScore ?? (detail.IsCorrect ? detail.MaxGrade.Value : 0f);
+                            recalculatedStudentScore += scoreEarned;
+                            
+                            enrichedDetails.Add(detail with { 
+                                Points = detail.MaxGrade.Value, 
+                                Options = qData.Options,
+                                QuestionType = qData.Type,
+                                Type = qData.Type ?? detail.Type
+                            });
+                        }
+                        else
+                        {
+                            float finalQuestionPointsToUse = teacherProvidedPoints ? qData.Points : 1.0f;
+                            if (!teacherProvidedPoints) {
+                                thisStudentMaxQuestions += 1.0f;
+                            }
+                            
+                            recalculatedStudentScore += detail.IsCorrect ? finalQuestionPointsToUse : 0f;
+                            
+                            enrichedDetails.Add(detail with { 
+                                Points = finalQuestionPointsToUse, 
+                                Options = qData.Options,
+                                QuestionType = qData.Type,
+                                Type = qData.Type ?? detail.Type
+                            });
+                        }
                     } else {
-                        if (detail.IsCorrect) recalculatedStudentScore += 1.0f;
-                        enrichedDetails.Add(detail with { Points = 1.0f });
+                        float finalQuestionPointsToUse = 1.0f;
+                        float scoreEarned = detail.IsCorrect ? 1.0f : 0f;
+
+                        if (detail.Method == "gemini" && detail.MaxGrade.HasValue) 
+                        {
+                            finalQuestionPointsToUse = detail.MaxGrade.Value;
+                            scoreEarned = detail.StudentScore ?? (detail.IsCorrect ? finalQuestionPointsToUse : 0f);
+                        }
+                        
+                        thisStudentMaxQuestions += finalQuestionPointsToUse;
+                        recalculatedStudentScore += scoreEarned;
+                        enrichedDetails.Add(detail with { Points = finalQuestionPointsToUse });
                     }
                 }
 
                 // 7️⃣ Save to Database
-                var studentExam = studentId != null 
-                    ? await _context.StudentExamPapers.IgnoreQueryFilters()
-                        .FirstOrDefaultAsync(s => s.ExamId == finalExamId && s.StudentId == studentId)
-                    : await _context.StudentExamPapers.IgnoreQueryFilters()
-                        .FirstOrDefaultAsync(s => s.ExamId == finalExamId && s.StudentId == null && s.GeneratedPdfPath == res.Filename);
+                StudentExamPaper? studentExam = null;
+                
+                // If it's a known student's paper, we check if they already have a paper for this exam to update it.
+                // If it's an unknown student, we always create a new paper record so they don't overwrite each other.
+                if (!isUnknownStudent)
+                {
+                    studentExam = await _context.StudentExamPapers.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
+                }
 
                 if (studentExam != null) {
                     studentExam.FinalScore = recalculatedStudentScore;
-                    studentExam.TotalQuestions = totalExamPointsByTeacher;
+                    studentExam.TotalQuestions = Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions);
                     studentExam.QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails);
                     studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
-                    studentExam.GeneratedAt = DateTime.Now; // Update time to move to top of table
-                    studentExam.GeneratedPdfPath = res.Filename; // Ensure correct page/file reference
-                    // Ensure the paper is owned by the person correcting it
-                    studentExam.OwnerId = _userContext.UserId ?? studentExam.OwnerId;
                 } else {
-                    var examObj = await _context.Exams.FindAsync(finalExamId);
                     if (examObj != null) {
                         studentExam = new StudentExamPaper {
-                            ExamId = finalExamId, StudentId = studentId, 
-                            OwnerId = _userContext.UserId ?? examObj.OwnerId, // Use current user if available
-                            FinalScore = recalculatedStudentScore, TotalQuestions = totalExamPointsByTeacher,
+                            ExamId = examId, StudentId = studentId, OwnerId = examObj.OwnerId,
+                            FinalScore = recalculatedStudentScore, TotalQuestions = Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions),
                             QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails),
-                            GeneratedAt = DateTime.Now, GeneratedPdfPath = res.Filename,
+                            GeneratedAt = DateTime.Now, GeneratedPdfPath = file.FileName,
                             AnnotatedImageUrl = res.AnnotatedImageUrl
                         };
                         _context.StudentExamPapers.Add(studentExam);
@@ -237,13 +298,13 @@ public class ExamAiService(
                 await _context.SaveChangesAsync();
 
                 // 8️⃣ Prepare Result for UI
-                var student = studentId != null ? await _context.Students.FindAsync(studentId) : null;
+                var student = await _context.Students.FindAsync(studentId);
                 examResults.Add(new McqResultDto(
                     res.Filename,
-                    new StudentInfoDto(studentId?.ToString() ?? "0", student?.FullName ?? "طالب مجهول (بدون باركود)"),
-                    new McqDetailsDto(recalculatedStudentScore, totalExamPointsByTeacher, enrichedDetails),
+                    new StudentInfoDto(studentId.ToString(), student?.FullName ?? "Unknown"),
+                    new McqDetailsDto(recalculatedStudentScore, Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions), enrichedDetails),
                     res.AnnotatedImageUrl.StartsWith("http") ? res.AnnotatedImageUrl : $"{BaseUrl}/{res.AnnotatedImageUrl.TrimStart('/')}",
-                    finalExamId,
+                    examId,
                     studentExam?.Id
                 ));
             }
@@ -259,7 +320,36 @@ public class ExamAiService(
                 }
             }
 
-            return Result.Success(new ExamResultsDto(examResults));
+            // 9️⃣ Merge results into students based on the ACTUAL NumberOfPages of the exam
+            var finalMergedResults = new List<McqResultDto>();
+            int numberOfPages = examObj?.NumberOfPages ?? 1;
+
+            for (int i = 0; i < examResults.Count; i += numberOfPages)
+            {
+                var chunk = examResults.Skip(i).Take(numberOfPages).ToList();
+                if (!chunk.Any()) break;
+
+                var first = chunk.First();
+                var allDetails = chunk.SelectMany(r => r.Details.Details).ToList();
+                float totalScore = chunk.Sum(r => r.Details.Score);
+                float maxTotalPoints = chunk.Max(r => r.Details.Total);
+                
+                // Join all images with a pipe '|' to support multi-page display in UI
+                string combinedImages = string.Join("|", chunk
+                    .Select(r => r.AnnotatedImageUrl)
+                    .Where(u => !string.IsNullOrEmpty(u)));
+
+                finalMergedResults.Add(new McqResultDto(
+                    first.Filename,
+                    first.StudentInfo,
+                    new McqDetailsDto(totalScore, maxTotalPoints, allDetails),
+                    combinedImages,
+                    first.ExamId,
+                    first.PaperId
+                ));
+            }
+
+            return Result.Success(new ExamResultsDto(finalMergedResults));
         }
         catch (Exception ex) {
             Console.WriteLine($"[Critical Error]: {ex.Message}");
