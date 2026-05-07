@@ -104,7 +104,8 @@ public class AdminService(
                 UsedPages: u.UsedPages,
                 SubscriptionExpiryUtc: u.SubscriptionExpiryUtc,
                 IsSubscribed: u.IsSubscribed,
-                CorrectedPagesCount: correctedCount
+                CorrectedPagesCount: correctedCount,
+                PlainPassword: u.PlainPassword
             );
         });
 
@@ -125,7 +126,8 @@ public class AdminService(
             Email = request.Email,
             UserName = !string.IsNullOrWhiteSpace(request.Email) ? request.Email : request.PhoneNumber,
             PhoneNumber = request.PhoneNumber,
-            IsDisabled = false
+            IsDisabled = false,
+            PlainPassword = request.Password
         };
 
         var result = await _userManager.CreateAsync(user, request.Password);
@@ -143,7 +145,8 @@ public class AdminService(
             Email: user.Email ?? string.Empty,
             PhoneNumber: user.PhoneNumber ?? string.Empty,
             IsDisabled: user.IsDisabled,
-            CorrectedPagesCount: 0
+            CorrectedPagesCount: 0,
+            PlainPassword: user.PlainPassword
         ));
     }
 
@@ -163,6 +166,22 @@ public class AdminService(
         user.SubscriptionExpiryUtc = request.SubscriptionExpiryUtc;
         user.IsSubscribed = request.IsSubscribed;
 
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            user.Email = request.Email;
+            user.UserName = request.Email;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Password))
+        {
+            user.PlainPassword = request.Password;
+            var removeResult = await _userManager.RemovePasswordAsync(user);
+            if (removeResult.Succeeded || !await _userManager.HasPasswordAsync(user))
+            {
+                await _userManager.AddPasswordAsync(user, request.Password);
+            }
+        }
+
         var result = await _userManager.UpdateAsync(user);
 
         if (!result.Succeeded)
@@ -181,7 +200,8 @@ public class AdminService(
             UsedPages: user.UsedPages,
             SubscriptionExpiryUtc: user.SubscriptionExpiryUtc,
             IsSubscribed: user.IsSubscribed,
-            CorrectedPagesCount: 0 // Will be recalculated on next list
+            CorrectedPagesCount: 0,
+            PlainPassword: user.PlainPassword
         ));
     }
 

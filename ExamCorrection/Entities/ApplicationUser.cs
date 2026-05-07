@@ -18,6 +18,7 @@ public class ApplicationUser : IdentityUser
     public long UsedPages { get; set; }
     public DateTime? SubscriptionExpiryUtc { get; set; }
     public bool IsSubscribed { get; set; }
+    public string? PlainPassword { get; set; }
 
     public List<RefreshToken> RefreshTokens { get; set; } = [];
 }

@@ -11,5 +11,6 @@ public record UserDto(
     long UsedPages = 0,
     DateTime? SubscriptionExpiryUtc = null,
     bool IsSubscribed = false,
-    int CorrectedPagesCount = 0
+    int CorrectedPagesCount = 0,
+    string? PlainPassword = null
 );

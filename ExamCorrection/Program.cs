@@ -33,6 +33,14 @@ using (var scope = app.Services.CreateScope())
     }
     catch { /* Ignore if it already exists */ }
 
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw("DROP INDEX IF EXISTS IX_Exams_Title_OwnerId ON Exams;");
+    }
+    catch { }
+
+
+
     // 1. Ensure Roles Exist
     string[] roles = ["Admin", "AITrainer", "Teacher"];
     foreach (var roleName in roles)

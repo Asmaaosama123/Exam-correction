@@ -34,10 +34,7 @@ public class ExamService : IExamService
     {
         try
         {
-            var isExistingTitle = await _context.Exams.AnyAsync(e => e.Title == request.Title);
-
-            if (isExistingTitle)
-                return Result.Failure(ExamErrors.DuplicatedExamName);
+            // Removed title uniqueness check to allow duplicate titles as requested.
 
             // السماح بـ PDF أو صورة
             var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png" };
@@ -591,18 +588,7 @@ public class ExamService : IExamService
 
                 var titleToUse = request.Title ?? $"امتحان جديد - {DateTime.Now:yyyy-MM-dd HH:mm}";
 
-                // التحقق من تكرار العنوان للمستخدم نفسه (بسبب Unique Index في قاعدة البيانات)
-                var duplicateTitle = await _context.Exams
-                    .AnyAsync(e => e.Title == titleToUse && e.OwnerId == currentUserId);
-
-                if (duplicateTitle)
-                {
-                    return Result.Failure<TeacherExamResponse>(new Error(
-                        "Exam.DuplicateTitle",
-                        $"لديك امتحان آخر بنفس العنوان ({titleToUse}). يرجى اختيار عنوان مختلف.",
-                        StatusCodes.Status400BadRequest
-                    ));
-                }
+                // Removed title uniqueness check to allow duplicate titles as requested.
 
                 // إنشاء امتحان جديد للامتحانات بدون باركود
                 exam = new Exam

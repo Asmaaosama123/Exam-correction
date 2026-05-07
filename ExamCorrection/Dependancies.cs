@@ -82,7 +82,7 @@ public static class Dependancies
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new InvalidOperationException("ExamCorrectionAiModel:BaseUrl is missing in appsettings.json");
             c.BaseAddress = new Uri(baseUrl);
-            c.Timeout = TimeSpan.FromMinutes(10);
+            c.Timeout = TimeSpan.FromMinutes(30);
         });
 
         services
@@ -97,7 +97,7 @@ public static class Dependancies
                 "ExamCorrectionAiModel:BaseUrl is missing in appsettings.json");
 
         c.BaseAddress = new Uri(baseUrl);
-        c.Timeout = TimeSpan.FromMinutes(10);
+        c.Timeout = TimeSpan.FromMinutes(30);
     });
 
 
