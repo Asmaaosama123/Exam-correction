@@ -14,7 +14,6 @@ public class Exam
     public string FiducialsData { get; set; } = string.Empty;
     public string OwnerId { get; set; } = string.Empty;
     public bool IsBarcode { get; set; }
-    
     public ApplicationUser? User { get; set; }
     public ICollection<StudentExamPaper> StudentPapers { get; set; } = [];
     public ICollection<ExamGoal> Goals { get; set; } = [];
