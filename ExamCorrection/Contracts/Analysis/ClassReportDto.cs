@@ -13,4 +13,5 @@ public class ClassReportDto
     public List<QuestionAnalysisDto> QuestionAnalysis { get; set; } = new();
 
     public List<GoalAnalysisDto> GoalAnalysis { get; set; } = new();
+    public List<StudentInterventionDto> StudentsNeedingIntervention { get; set; } = new();
 }
