@@ -38,6 +38,10 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
         {
             papersQuery = papersQuery.Where(p => p.Id == request.PaperId.Value);
         }
+        else if (request.ClassId.HasValue && request.ClassId.Value > 0)
+        {
+            papersQuery = papersQuery.Where(p => p.Student!.ClassId == request.ClassId.Value);
+        }
             
         var papers = await papersQuery.OrderBy(x => x.Student!.FullName).ToListAsync();
 
@@ -59,18 +63,32 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             var font = iText.Kernel.Font.PdfFontFactory.CreateFont(fontPath, iText.IO.Font.PdfEncodings.IDENTITY_H);
 
             var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
-            var className = papers.FirstOrDefault()?.Student?.Class?.Name ?? "الكل";
+            var className = "جميع الفصول";
+            if (request.ClassId.HasValue && request.ClassId.Value > 0)
+            {
+                var @class = await _context.Classes.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == request.ClassId.Value);
+                className = @class?.Name ?? "جميع الفصول";
+            }
+            else if (papers.Any() && !request.PaperId.HasValue)
+            {
+                // Fallback for when ClassId is not provided but all papers belong to one class
+                var firstClass = papers.FirstOrDefault()?.Student?.Class?.Name;
+                if (papers.All(p => p.Student?.Class?.Name == firstClass))
+                {
+                    className = firstClass ?? "جميع الفصول";
+                }
+            }
             var subjectName = exam.Subject?.Trim() ?? "عام";
 
-            // Modern Color Palette (matching frontend)
-            var primaryBlue = new iText.Kernel.Colors.DeviceRgb(17, 85, 204); 
-            var accentBlue = new iText.Kernel.Colors.DeviceRgb(59, 130, 246);
-            var successGreen = new iText.Kernel.Colors.DeviceRgb(16, 185, 129);
-            var dangerRed = new iText.Kernel.Colors.DeviceRgb(239, 68, 68);
-            var warningOrange = new iText.Kernel.Colors.DeviceRgb(245, 158, 11);
-            var darkGray = new iText.Kernel.Colors.DeviceRgb(75, 85, 99);
-            var lightGrayBg = new iText.Kernel.Colors.DeviceRgb(249, 250, 251);
-            var borderColor = new iText.Kernel.Colors.DeviceRgb(229, 231, 235);
+            // Modern Professional Calm Color Palette
+            var primaryBlue = new iText.Kernel.Colors.DeviceRgb(71, 85, 105);   // Slate 600
+            var accentBlue = new iText.Kernel.Colors.DeviceRgb(148, 163, 184); // Slate 400
+            var successGreen = new iText.Kernel.Colors.DeviceRgb(16, 185, 129); // Emerald 500
+            var dangerRed = new iText.Kernel.Colors.DeviceRgb(239, 68, 68);    // Red 500
+            var warningOrange = new iText.Kernel.Colors.DeviceRgb(245, 158, 11); // Amber 500
+            var darkGray = new iText.Kernel.Colors.DeviceRgb(30, 41, 59);     // Slate 800
+            var lightGrayBg = new iText.Kernel.Colors.DeviceRgb(248, 250, 252); // Slate 50
+            var borderColor = new iText.Kernel.Colors.DeviceRgb(226, 232, 240); // Slate 200
 
             // Reusable Header Helper
             Action<string> addPageHeader = (title) => {
@@ -105,12 +123,11 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     var cell = new iText.Layout.Element.Cell().SetBorder(new iText.Layout.Borders.SolidBorder(borderColor, 0.5f)).SetPadding(3).SetBackgroundColor(lightGrayBg).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
                     var p = new iText.Layout.Element.Paragraph().SetMargin(0).SetMultipliedLeading(1.0f);
                     
-                    // Shape label AND value parts to avoid flipping
-                    string label = ArabicTextShaper.Shape($"{lbl}: ");
-                    string value = ArabicTextShaper.Shape(val);
+                    // Shape combined text to fix RTL flipping and overlapping
+                    string combined = $"{lbl}: {val}";
+                    string shapedText = ArabicTextShaper.Shape(combined);
                     
-                    p.Add(new iText.Layout.Element.Text(label).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
-                    p.Add(new iText.Layout.Element.Text(value).SetFont(font).SetFontSize(9).SetFontColor(darkGray));
+                    p.Add(new iText.Layout.Element.Text(shapedText).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue));
                     
                     cell.Add(p);
                     subHeader.AddCell(cell);
@@ -218,7 +235,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 }
 
                 var detailTable = new iText.Layout.Element.Table(new float[] { 1, 5, 1.5f, 1.5f, 1.5f }).UseAllAvailableWidth().SetMarginTop(5).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                string[] headers = { "السؤال", "الهدف / المهارة", "الإجابات", "النسبة %", "التقييم" };
+                string[] headers = {   "التقييم","النسبة %","الإجابات","الهدف / المهارة", "السؤال"};
                 foreach (var h in headers)
                     detailTable.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryBlue).SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(10)));
 
@@ -229,11 +246,24 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     var clr = q.SuccessRate >= 80 ? successGreen : q.SuccessRate >= 50 ? warningOrange : dangerRed;
                     var eval = q.SuccessRate >= 80 ? "متقن" : q.SuccessRate >= 50 ? "متوسط" : "متعثر";
                     
-                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph((i + 1).ToString()).SetFontSize(9)));
-                    detailTable.AddCell(new iText.Layout.Element.Cell().Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(goalText)).SetFont(font).SetFontSize(9)));
-                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{q.CorrectCount} / {classReport.TotalStudents}").SetFontSize(9)));
-                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{q.SuccessRate:F0}%").SetFont(font).SetBold().SetFontColor(clr)));
+                    // Translate Question Type
+                    string translatedType = q.Type?.ToLower() switch {
+                        "mcq" => "اختيار",
+                        "true_false" => "صح/خطأ",
+                        "matching" => "توصيل",
+                        "essay" => "مقالي",
+                        _ => q.Type ?? ""
+                    };
+
+                    // Fix parentheses flipping and format as 1 (اختيار)
+                    string typeShaped = ArabicTextShaper.Shape(translatedType);
+                    string finalLabel = $"{i + 1} ({typeShaped})";
+
                     detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(eval)).SetFont(font).SetFontSize(9).SetFontColor(clr)));
+                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{q.SuccessRate:F0}%").SetFont(font).SetBold().SetFontColor(clr)));
+                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{q.CorrectCount} / {classReport.TotalStudents}").SetFontSize(9)));
+                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(goalText)).SetFont(font).SetFontSize(9)));
+                    detailTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(finalLabel).SetFont(font).SetFontSize(9)));
                 }
                 document.Add(detailTable);
 
@@ -435,14 +465,67 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             remedialTable.AddCell(remedialCell);
             document.Add(remedialTable);
         }
-        else
-        {
-            var remedialTable = new iText.Layout.Element.Table(1).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT).SetMarginTop(2);
-            var remedialCell = new iText.Layout.Element.Cell().SetPadding(5).SetBackgroundColor(lightGrayBg).SetBorder(new iText.Layout.Borders.SolidBorder(accentBlue, 1));
-            remedialCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("أداء استثنائي ومتقن! الطالب أظهر إتقاناً لجميع الأهداف. يُنصح بالحفاظ على هذا المستوى الرائع.")).SetFont(font).SetFontSize(8.5f).SetFontColor(emeraldText).SetMargin(0));
-            remedialTable.AddCell(remedialCell);
-            document.Add(remedialTable);
+
+        // --- Part 4: Answers Details (New Page) ---
+        document.Add(new iText.Layout.Element.AreaBreak(iText.Layout.Properties.AreaBreakType.NEXT_PAGE));
+        
+        var answersHeader = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تفاصيل الإجابات")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(primaryBlue).SetMarginBottom(10).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
+        document.Add(answersHeader);
+
+        // Summary Badges Row
+        var badgesTable = new iText.Layout.Element.Table(3).SetHorizontalAlignment(iText.Layout.Properties.HorizontalAlignment.RIGHT).SetMarginBottom(10).SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+        
+        var correctBadge = new iText.Layout.Element.Cell().SetPadding(5).SetBackgroundColor(emeraldBg).SetBorder(new iText.Layout.Borders.SolidBorder(emeraldText, 0.5f)).SetPaddingLeft(15).SetPaddingRight(15);
+        correctBadge.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"{studentReport.TotalCorrect} إجابة صحيحة")).SetFont(font).SetFontSize(10).SetFontColor(emeraldText).SetMargin(0));
+        
+        var wrongBadge = new iText.Layout.Element.Cell().SetPadding(5).SetBackgroundColor(roseBg).SetBorder(new iText.Layout.Borders.SolidBorder(roseText, 0.5f)).SetPaddingLeft(15).SetPaddingRight(15);
+        wrongBadge.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"{studentReport.Answers.Count - studentReport.TotalCorrect} إجابة خاطئة")).SetFont(font).SetFontSize(10).SetFontColor(roseText).SetMargin(0));
+        
+        badgesTable.AddCell(correctBadge);
+        badgesTable.AddCell(new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetWidth(15)); // Gutter
+        badgesTable.AddCell(wrongBadge);
+        document.Add(badgesTable);
+
+        var answersTable = new iText.Layout.Element.Table(new float[] { 1, 2, 2, 2 }).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
+        string[] ansHeaders = { "التقييم", "الإجابة الصحيحة", "إجابة الطالب", "السؤال" };
+        foreach (var h in ansHeaders)
+            answersTable.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryBlue).SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(10)));
+
+        Func<string, string> translateVal = (val) => {
+            if (string.IsNullOrEmpty(val)) return val;
+            var v = val.Trim().ToUpper();
+            if (v == "TRUE") return "صح";
+            if (v == "FALSE") return "خطأ";
+            return val;
+        };
+
+        for (int i = 0; i < studentReport.Answers.Count; i++) {
+            var ans = studentReport.Answers[i];
+            var eval = ans.Ok ? "صحيحة" : "خاطئة";
+            var bg = ans.Ok ? emeraldBg : roseBg;
+            var txtClr = ans.Ok ? emeraldText : roseText;
+
+            string translatedType = ans.Type?.ToLower() switch {
+                "mcq" => "اختيار",
+                "true_false" => "صح/خطأ",
+                "matching" => "توصيل",
+                "essay" => "مقالي",
+                _ => ans.Type ?? ""
+            };
+            
+            // Fix parentheses flipping
+            string typeShaped = ArabicTextShaper.Shape(translatedType);
+            string qNum = $"{i + 1} ({typeShaped})";
+
+            answersTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetBackgroundColor(bg).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(eval)).SetFont(font).SetFontSize(9).SetFontColor(txtClr)));
+            answersTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(translateVal(ans.Gt))).SetFont(font).SetFontSize(9)));
+            
+            string sAns = string.IsNullOrEmpty(ans.Pred) || ans.Pred == "None" ? "بدون إجابة" : translateVal(ans.Pred);
+            answersTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(sAns)).SetFont(font).SetFontSize(9).SetFontColor(ans.Ok ? darkGray : dangerRed)));
+            
+            answersTable.AddCell(new iText.Layout.Element.Cell().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(qNum).SetFont(font).SetFontSize(9).SetFontColor(primaryBlue)));
         }
+        document.Add(answersTable);
     }
     
     // QuickChart Chart Generation
@@ -914,7 +997,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             var primaryGreen = new iText.Kernel.Colors.DeviceRgb(15, 139, 76);
             var successGreen = new iText.Kernel.Colors.DeviceRgb(16, 185, 129);
             var successGreenBg = new iText.Kernel.Colors.DeviceRgb(236, 253, 245); // emerald-50
-            var dangerRed = new iText.Kernel.Colors.DeviceRgb(244, 63, 94); // rose-500
+var dangerRed = new iText.Kernel.Colors.DeviceRgb(244, 63, 94); // rose-500
             var dangerRedBg = new iText.Kernel.Colors.DeviceRgb(255, 241, 242); // rose-50
             var lightGrayBg = new iText.Kernel.Colors.DeviceRgb(248, 250, 252); // slate-50
             var textSlate = new iText.Kernel.Colors.DeviceRgb(71, 85, 105); // slate-600
@@ -937,7 +1020,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 var papers = await _context.StudentExamPapers
                     .Include(p => p.Exam)
                     .IgnoreQueryFilters()
-                    .Where(p => p.StudentId == request.StudentId.Value) // Student ownership is already verified above
+                    .Where(p => p.StudentId == request.StudentId.Value)
+                    .Where(p => p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
                     .ToListAsync();
 
                 var examIds = papers.Select(p => p.ExamId).Distinct().ToList();
@@ -951,22 +1035,38 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
             }
             else
             {
-                // Class Progress Summary Report (Top Students Etc)
+                // Determine the classroom name for the header
+                string classroomName = "جميع الفصول";
+                if (request.ClassId.HasValue)
+                {
+                    var cls = await _context.Classes.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == request.ClassId.Value && c.OwnerId == userId);
+                    if (cls != null) classroomName = cls.Name;
+                }
+
                 var teacherExamsQuery = _context.Exams.Where(e => e.OwnerId == userId);
                 var teacherExamIds = await teacherExamsQuery.Select(e => e.Id).ToListAsync();
 
-                var papers = await _context.StudentExamPapers
-                    .Include(p => p.Exam)
-                    .IgnoreQueryFilters()
-                    .Where(p => teacherExamIds.Contains(p.ExamId) && p.OwnerId == userId)
-                    .ToListAsync();
-
-                var studentIdsWithExams = papers.Select(p => p.StudentId).Distinct().ToList();
-
-                var students = await _context.Students
+                // 1. Get filtered students
+                var studentsQuery = _context.Students
                     .Include(s => s.Class)
                     .IgnoreQueryFilters()
-                    .Where(s => studentIdsWithExams.Contains(s.Id) && s.OwnerId == userId)
+                    .Where(s => s.OwnerId == userId);
+
+                if (request.ClassId.HasValue && request.ClassId.Value > 0)
+                    studentsQuery = studentsQuery.Where(s => s.ClassId == request.ClassId.Value);
+
+                var students = await studentsQuery.ToListAsync();
+                var studentIds = students.Select(s => s.Id).ToList();
+
+                // 2. Get papers for these students
+                var papers = await _context.StudentExamPapers
+                    .Include(p => p.Exam)
+                    .Include(p => p.Student)
+                        .ThenInclude(s => s.Class)
+                    .IgnoreQueryFilters()
+                    .Where(p => teacherExamIds.Contains(p.ExamId) && p.OwnerId == userId)
+                    .Where(p => p.StudentId.HasValue && studentIds.Contains(p.StudentId.Value))
+                    .Where(p => p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
                     .ToListAsync();
 
                 var goals = await _context.ExamGoals
@@ -977,6 +1077,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 foreach (var stObj in students.OrderBy(s => s.FullName))
                 {
                     var studentPapers = papers.Where(p => p.StudentId == stObj.Id).ToList();
+                    if (!studentPapers.Any()) continue;
                     var progress = _analysisService.GenerateStudentProgress(stObj, studentPapers, goals);
                     reportsToGenerate.Add((stObj, progress, false));
                 }
@@ -986,18 +1087,20 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     .ThenBy(s => s.StudentName)
                     .ToList();
 
+
                 // --- Summary Header ---
                 var headerTable = new iText.Layout.Element.Table(3).UseAllAvailableWidth().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetMarginBottom(20);
                 
                 var leftHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
-                string printDateText = DateTime.Now.ToString("yyyy-MM-dd") + ArabicTextShaper.Shape(" :تاريخ التقرير");
+                string printDateText = ArabicTextShaper.Shape("تاريخ التقرير") + " : " + DateTime.Now.ToString("yyyy-MM-dd");
                 var dateP = new iText.Layout.Element.Paragraph().SetMargin(0).SetFontSize(8);
                 dateP.Add(new iText.Layout.Element.Text(printDateText).SetFont(font).SetFontColor(textSlate));
                 leftHeader.Add(dateP);
                 headerTable.AddCell(leftHeader);
                 
                 var midHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER);
-                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape( " تعديل تقرير أداء الطلاب التراكمي")).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryBlue));
+                var titleText = request.ClassId.HasValue ? $"تقرير أداء طلاب فصل {classroomName}" : "تقرير أداء جميع الطلاب التراكمي";
+                midHeader.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(titleText)).SetFont(font).SetFontSize(16).SetBold().SetFontColor(primaryBlue));
                 headerTable.AddCell(midHeader);
                 
                 var rightHeader = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT);
@@ -1008,7 +1111,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // --- Summary Table ---
                 var table = new iText.Layout.Element.Table(new float[] { 3, 1, 1, 1, 2, 2, 1 }).UseAllAvailableWidth().SetBaseDirection(iText.Layout.Properties.BaseDirection.RIGHT_TO_LEFT);
-                string[] headers = {  " التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "الاختبارات", "الفصل","اسم الطالب" };
+                string[] headers = {  " التوجه", "تحتاج دعم","نقاط القوة", "المتوسط", "عدد الاختبارات", "الفصل","اسم الطالب" };
                 foreach (var h in headers)
                     table.AddHeaderCell(new iText.Layout.Element.Cell().SetBackgroundColor(primaryBlue).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).SetPadding(8).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(h)).SetFont(font).SetFontSize(9).SetBold().SetFontColor(iText.Kernel.Colors.ColorConstants.WHITE)));
 
@@ -1024,9 +1127,9 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                     table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(strengthsText)).SetFont(font).SetFontSize(7).SetFontColor(primaryGreen).SetBold()));
                     
                     var avgClr = s.OverallAverage >= 50 ? primaryGreen : dangerRed;
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{s.OverallAverage:F0}%").SetFont(font).SetBold().SetFontColor(avgClr).SetFontSize(9)));
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph($"{s.OverallAverage:F1}%").SetFont(font).SetBold().SetFontColor(avgClr).SetFontSize(9)));
                     
-                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(s.ExamsTaken.ToString()).SetFontSize(8).SetFontColor(darkGray)));
+                    table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(s.ExamCount.ToString()).SetFontSize(8).SetFontColor(darkGray)));
                     table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.ClassName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
                     table.AddCell(new iText.Layout.Element.Cell().SetPadding(8).SetBorder(new iText.Layout.Borders.SolidBorder(darkGray, 0.5f)).Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(s.StudentName)).SetFont(font).SetFontSize(8).SetFontColor(darkGray).SetBold()));
 
@@ -1065,8 +1168,8 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                 
                 var leftCell = new iText.Layout.Element.Cell().SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT).SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.BOTTOM);
                 var datePara = new iText.Layout.Element.Paragraph().SetMargin(0).SetFontSize(8);
-                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(":تاريخ التقرير")).SetFont(font).SetFontColor(primaryBlue).SetBold());
                 datePara.Add(new iText.Layout.Element.Text(DateTime.Now.ToString("yyyy-MM-dd")).SetFont(font).SetFontColor(textSlate));
+                datePara.Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape("تاريخ التقرير"+" : ") ).SetFont(font).SetFontColor(primaryBlue).SetBold());
                 leftCell.Add(datePara);
                 headerTable.AddCell(leftCell);
                 
@@ -1096,7 +1199,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                 // Class / Grade
                 var classP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.Class?.Name ?? "غير محدد")).SetFont(font).SetFontSize(14).SetBold().SetFontColor(darkGray);
-                addBannerCell("الفصل الدراسي", classP, primaryBlue);
+                addBannerCell("فصل", classP, primaryBlue);
 
                 // Student Name
                 var nameP = new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape(student.FullName)).SetFont(font).SetFontSize(14).SetBold().SetFontColor(darkGray);
@@ -1181,15 +1284,18 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                         cardHead.AddCell(badgeContainer);
                         cardCell.Add(cardHead);
                         
-                        cardCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("إتقان المهارة حالياً")).SetFont(font).SetFontSize(7).SetFontColor(textSlate).SetMarginTop(8));
+                        cardCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("النسبة")).SetFont(font).SetFontSize(8).SetFontColor(textSlate).SetMarginTop(8));
                         var rateClr = latest.SuccessRate >= 80 ? successGreen : latest.SuccessRate >= 50 ? primaryGreen : dangerRed;
-                        cardCell.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"%{latest.SuccessRate:F0}")).SetFont(font).SetFontSize(13).SetBold().SetFontColor(rateClr).SetMarginBottom(0));
+                        cardCell.Add(new iText.Layout.Element.Paragraph(latest.SuccessRate.ToString("F0") + "%").SetFont(font).SetFontSize(13).SetBold().SetFontColor(rateClr).SetMarginBottom(0));
                         
                         float success = (float)latest.SuccessRate;
+                        if (success < 1) success = 1; // Minimum width to show color
                         float remaining = 100f - success;
+                        if (remaining < 0) remaining = 0;
+
                         var pBar = new iText.Layout.Element.Table(new float[] { success, remaining }).UseAllAvailableWidth().SetMarginTop(3).SetMarginBottom(12);
-                        pBar.AddCell(new iText.Layout.Element.Cell().SetHeight(4).SetBackgroundColor(rateClr).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBorderRadius(new iText.Layout.Properties.BorderRadius(2)));
-                        pBar.AddCell(new iText.Layout.Element.Cell().SetHeight(4).SetBackgroundColor(borderColor).SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+                        pBar.AddCell(new iText.Layout.Element.Cell().SetHeight(6).SetBackgroundColor(rateClr).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
+                        pBar.AddCell(new iText.Layout.Element.Cell().SetHeight(6).SetBackgroundColor(borderColor).SetBorder(iText.Layout.Borders.Border.NO_BORDER));
                         cardCell.Add(pBar);
                         
                         var cardFoot = new iText.Layout.Element.Table(skill.History.Count).UseAllAvailableWidth();
@@ -1245,7 +1351,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
                         
                         // Strengths for this exam
                         var sCellExam = new iText.Layout.Element.Cell().SetPadding(8).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(iText.Kernel.Colors.ColorConstants.WHITE).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
-                        string strengthHeaderTxt = ArabicTextShaper.Shape($"نقاط القوة ({examStrengths.Count})");
+                        string strengthHeaderTxt = ArabicTextShaper.Shape("نقاط القوة") + " (" + examStrengths.Count + ")";
                         sCellExam.Add(new iText.Layout.Element.Paragraph(strengthHeaderTxt).SetFont(font).SetFontSize(8).SetBold().SetFontColor(successGreen).SetBackgroundColor(successGreenBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
                         foreach(var g in examStrengths) {
                             var row = new iText.Layout.Element.Table(new float[] { 1, 3, 2 }).UseAllAvailableWidth().SetMarginTop(4);
@@ -1262,7 +1368,7 @@ public class AnalysisReportService(ApplicationDbContext context, IAnalysisServic
 
                         // Recommendations for this exam
                         var rCellExam = new iText.Layout.Element.Cell().SetPadding(8).SetBorder(iText.Layout.Borders.Border.NO_BORDER).SetBackgroundColor(iText.Kernel.Colors.ColorConstants.WHITE).SetBorderRadius(new iText.Layout.Properties.BorderRadius(5));
-                        string recHeaderTxt = ArabicTextShaper.Shape($"توصيات للتطوير نقاط الضعف ({examRecs.Count})");
+                        string recHeaderTxt = ArabicTextShaper.Shape("توصيات للتطوير نقاط الضعف") + " (" + examRecs.Count + ")";
                         rCellExam.Add(new iText.Layout.Element.Paragraph(recHeaderTxt).SetFont(font).SetFontSize(8).SetBold().SetFontColor(dangerRed).SetBackgroundColor(dangerRedBg).SetPadding(3).SetBorderRadius(new iText.Layout.Properties.BorderRadius(3)));
                         foreach(var g in examRecs) {
                             var row = new iText.Layout.Element.Table(new float[] { 1, 3, 2 }).UseAllAvailableWidth().SetMarginTop(4);

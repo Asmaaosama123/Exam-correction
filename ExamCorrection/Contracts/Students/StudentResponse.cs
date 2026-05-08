@@ -6,6 +6,7 @@ public record StudentResponse(
     string FullName,
     string Email,
     string MobileNumber,
+    int? ClassId,
     string ClassName,
     bool IsDisabled,
     DateTime CreatedAt

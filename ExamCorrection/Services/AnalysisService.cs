@@ -60,7 +60,17 @@ public class AnalysisService : IAnalysisService
             PassedStudents = passed,
             FailedStudents = failed,
             QuestionAnalysis = AnalyzeQuestions(validPapers, fallbackQuestionsJson),
-            GoalAnalysis = AnalyzeGoals(validPapers, goals)
+            GoalAnalysis = AnalyzeGoals(validPapers, goals),
+            StudentsNeedingIntervention = validPapers
+                .Where(p => p.TotalQuestions > 0 && (p.FinalScore / p.TotalQuestions) < 0.5)
+                .Select(p => new StudentInterventionDto
+                {
+                    StudentId = p.StudentId ?? 0,
+                    StudentName = p.Student?.FullName ?? "Unknown Student",
+                    Percentage = (p.TotalQuestions > 0) ? ((p.FinalScore ?? 0) / (double)p.TotalQuestions * 100) : 0,
+                    ClassName = p.Student?.Class?.Name ?? "غير محدد"
+                })
+                .ToList()
         };
     }
 
@@ -229,7 +239,9 @@ public class AnalysisService : IAnalysisService
 
     public StudentProgressDto GenerateStudentProgress(Student student, List<StudentExamPaper> papers, List<ExamGoal> goals)
     {
-        var summaries = papers.Select(p => new StudentExamSummaryDto
+        var summaries = papers
+            .Where(p => p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
+            .Select(p => new StudentExamSummaryDto
         {
             ExamId = p.ExamId,
             ExamTitle = p.Exam?.Title ?? "اختبار " + p.ExamId,
@@ -268,7 +280,10 @@ public class AnalysisService : IAnalysisService
 
         foreach (var student in students)
         {
-            var studentPapers = allPapers.Where(p => p.StudentId == student.Id).OrderBy(p => p.GeneratedAt).ToList();
+            var studentPapers = allPapers
+                .Where(p => p.StudentId == student.Id && p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
+                .OrderBy(p => p.GeneratedAt)
+                .ToList();
             if (!studentPapers.Any()) continue;
 
             float totalPercentage = 0;
@@ -318,7 +333,7 @@ public class AnalysisService : IAnalysisService
                 ClassName = student.Class?.Name ?? "غير محدد",
                 OverallAverage = average,
                 PerformanceLevel = level,
-                ExamsTaken = studentPapers.Count,
+                ExamCount = studentPapers.Count,
                 Strengths = strengths,
                 Weaknesses = weaknesses,
                 Change = change

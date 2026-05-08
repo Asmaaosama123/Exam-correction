@@ -12,6 +12,7 @@ public class DetailedAnalysisPdfRequestDto
 {
     public int ExamId { get; set; }
     public int? PaperId { get; set; }
+    public int? ClassId { get; set; }
     public string? RadarImageBase64 { get; set; }
     public string? BarChartImageBase64 { get; set; }
     public string? StrengthRadarImageBase64 { get; set; }

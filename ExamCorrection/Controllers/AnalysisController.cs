@@ -51,13 +51,21 @@ public class AnalysisController : ControllerBase
     }
 
     [HttpGet("exam/{examId}/class-report")]
-    public async Task<IActionResult> GetClassReport(int examId)
+    public async Task<IActionResult> GetClassReport(int examId, [FromQuery] int? classId)
     {
-        Console.WriteLine($"[DEBUG] GetClassReport called for examId: {examId}");
-        var papers = await _context.StudentExamPapers
+        Console.WriteLine($"[DEBUG] GetClassReport called for examId: {examId}, classId: {classId}");
+        var query = _context.StudentExamPapers
             .IgnoreQueryFilters()
-            .Where(p => p.ExamId == examId)
-            .ToListAsync();
+            .Include(p => p.Student)
+            .ThenInclude(s => s.Class)
+            .Where(p => p.ExamId == examId);
+
+        if (classId.HasValue)
+        {
+            query = query.Where(p => p.Student.ClassId == classId.Value);
+        }
+
+        var papers = await query.ToListAsync();
 
         Console.WriteLine($"[DEBUG] Found {papers.Count} papers for examId: {examId}");
 
@@ -114,6 +122,7 @@ public class AnalysisController : ControllerBase
                 p.StudentId,
                 StudentName = p.Student != null ? p.Student.FullName : "Unknown Student",
                 ClassName = p.Student != null && p.Student.Class != null ? p.Student.Class.Name : "غير محدد",
+                ClassId = p.Student != null ? p.Student.ClassId : (int?)null,
                 p.FinalScore,
                 p.TotalQuestions
             })
@@ -134,9 +143,9 @@ public class AnalysisController : ControllerBase
             return NotFound("Student not found.");
 
         var papers = await _context.StudentExamPapers
-            .IgnoreQueryFilters() // Added .IgnoreQueryFilters()
+            .IgnoreQueryFilters()
             .Include(p => p.Exam)
-            .Where(p => p.StudentId == studentId)
+            .Where(p => p.StudentId == studentId && p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]")
             .ToListAsync();
 
         var examIds = papers.Select(p => p.ExamId).Distinct().ToList();
@@ -151,7 +160,7 @@ public class AnalysisController : ControllerBase
     }
 
     [HttpGet("students-progress-summary")]
-    public async Task<IActionResult> GetStudentsProgressSummary()
+    public async Task<IActionResult> GetStudentsProgressSummary([FromQuery] int? classId)
     {
         // Get the current user ID
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -162,18 +171,32 @@ public class AnalysisController : ControllerBase
        
         var teacherExamIds = await teacherExamsQuery.Select(e => e.Id).ToListAsync();
 
-        var papers = await _context.StudentExamPapers
+        var papersQuery = _context.StudentExamPapers
             .IgnoreQueryFilters()
-            .Where(p => teacherExamIds.Contains(p.ExamId))
-            .ToListAsync();
+            .Include(p => p.Student)
+            .Where(p => teacherExamIds.Contains(p.ExamId) && p.TotalQuestions > 0 && !string.IsNullOrEmpty(p.QuestionDetailsJson) && p.QuestionDetailsJson != "[]");
+
+        if (classId.HasValue)
+        {
+            papersQuery = papersQuery.Where(p => p.Student.ClassId == classId.Value);
+        }
+
+        var papers = await papersQuery.ToListAsync();
+
 
         var studentIdsWithExams = papers.Select(p => p.StudentId).Distinct().ToList();
-
-        var students = await _context.Students
+        
+        var studentsQuery = _context.Students
             .IgnoreQueryFilters()
             .Include(s => s.Class)
-            .Where(s => studentIdsWithExams.Contains(s.Id))
-            .ToListAsync();
+            .Where(s => studentIdsWithExams.Contains(s.Id));
+
+        if (classId.HasValue)
+        {
+            studentsQuery = studentsQuery.Where(s => s.ClassId == classId.Value);
+        }
+
+        var students = await studentsQuery.ToListAsync();
 
         var goals = await _context.ExamGoals
             .IgnoreQueryFilters()
