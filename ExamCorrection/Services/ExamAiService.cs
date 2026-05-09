@@ -158,77 +158,85 @@ public class ExamAiService(
                 }
             }
 
-            // 6️⃣ Process Results & Re-Calculate Scores using Teacher's Map
-            var examResults = new List<McqResultDto>();
-            foreach (var res in mcqData.Results)
+            // 6️⃣ Group Results by PaperId (Identified by AI) for correct student mapping
+            var groupedAiResults = mcqData.Results
+                .GroupBy(r => r.PaperId > 0 ? r.PaperId.ToString() : r.Filename)
+                .ToList();
+
+            var finalMergedResults = new List<McqResultDto>();
+
+            foreach (var group in groupedAiResults)
             {
+                var pages = group.ToList();
+                var firstPage = pages.First();
+
+                // 1. Identify Student (Try to get barcode from any page in this paper)
                 int studentId = 0;
-                // Student identification logic (Simplified for brevity)
-                if (res.StudentInfo != null && !string.IsNullOrEmpty(res.StudentInfo.StudentId))
-                {
-                     if (int.TryParse(res.StudentInfo.StudentId, out int sId)) studentId = sId;
-                }
+                var studentInfoWithId = pages.FirstOrDefault(p => p.StudentInfo != null && !string.IsNullOrEmpty(p.StudentInfo.StudentId));
+                
+                if (studentInfoWithId != null && int.TryParse(studentInfoWithId.StudentInfo.StudentId, out int sId)) 
+                    studentId = sId;
                 
                 bool isUnknownStudent = false;
                 if (studentId == 0)
                 {
-                    // Fallback: Assign to an "Unknown Student" in a dedicated class
+                    // AI might have extracted a name and class even if no barcode ID was found
+                    string aiName = pages.FirstOrDefault(p => p.StudentInfo != null && !string.IsNullOrEmpty(p.StudentInfo.StudentName))?.StudentInfo.StudentName ?? "";
+                    
                     var unknownClassName = "أوراق بدون باركود";
                     var teacherClass = await _context.Classes.FirstOrDefaultAsync(c => c.OwnerId == _userContext.UserId && c.Name == unknownClassName);
-                    
                     if (teacherClass == null)
                     {
-                        teacherClass = new Class
-                        {
-                            Name = unknownClassName,
-                            OwnerId = _userContext.UserId
-                        };
+                        teacherClass = new Class { Name = unknownClassName, OwnerId = _userContext.UserId };
                         _context.Classes.Add(teacherClass);
                         await _context.SaveChangesAsync();
                     }
 
-                    var studentsCount = await _context.Students.Where(s => s.ClassId == teacherClass.Id).CountAsync();
-                    var newStudentName = $"طالب {studentsCount + 1} (بدون باركود)";
-                    
-                    var unknownStudent = new Student
+                    // Try to find if we already have a student with this extracted name in the teacher's classes
+                    var existingStudent = !string.IsNullOrEmpty(aiName) 
+                        ? await _context.Students.FirstOrDefaultAsync(s => s.OwnerId == _userContext.UserId && s.FullName == aiName)
+                        : null;
+
+                    if (existingStudent != null)
                     {
-                        FullName = newStudentName,
-                        ClassId = teacherClass.Id,
-                        OwnerId = _userContext.UserId
-                    };
-                    _context.Students.Add(unknownStudent);
-                    await _context.SaveChangesAsync();
-                    
-                    studentId = unknownStudent.Id;
-                    isUnknownStudent = true;
+                        studentId = existingStudent.Id;
+                    }
+                    else
+                    {
+                        var studentsCount = await _context.Students.Where(s => s.ClassId == teacherClass.Id).CountAsync();
+                        var newStudentName = !string.IsNullOrEmpty(aiName) ? aiName : $"طالب {studentsCount + 1} (بدون باركود)";
+                        var unknownStudent = new Student { FullName = newStudentName, ClassId = teacherClass.Id, OwnerId = _userContext.UserId };
+                        _context.Students.Add(unknownStudent);
+                        await _context.SaveChangesAsync();
+                        studentId = unknownStudent.Id;
+                        isUnknownStudent = true;
+                    }
                 }
 
-                float recalculatedStudentScore = 0;
-                var enrichedDetails = new List<QuestionResultDto>();
+                // 2. Aggregate Details and Calculate Score across all pages
+                float totalRecalculatedScore = 0;
+                var allEnrichedDetails = new List<QuestionResultDto>();
+                float totalMaxPoints = totalExamPointsByTeacher;
 
-                if (res.Details?.Details == null)
+                foreach (var page in pages)
                 {
-                    Console.WriteLine($"[Warning] No details found for student {studentId} in file {res.Filename}");
-                    continue;
-                }
+                    if (page.Details?.Details == null) continue;
 
-                float thisStudentMaxQuestions = totalExamPointsByTeacher;
-
-                foreach (var detail in res.Details.Details)
-                {
-                    string detailId = detail.Id?.Trim().ToLower().TrimStart('q', '0') ?? "";
-                    
-                    if (questionDataMap.TryGetValue(detailId, out var qData)) {
-                        bool teacherProvidedPoints = qData.Points > 0;
-                        
-                        if (detail.Method == "gemini" && !teacherProvidedPoints && detail.MaxGrade.HasValue) 
+                    foreach (var detail in page.Details.Details)
+                    {
+                        string detailId = detail.Id?.Trim().ToLower().TrimStart('q', '0') ?? "";
+                        if (questionDataMap.TryGetValue(detailId, out var qData))
                         {
-                            thisStudentMaxQuestions += detail.MaxGrade.Value;
-                            float scoreEarned = detail.StudentScore ?? (detail.IsCorrect ? detail.MaxGrade.Value : 0f);
-                            recalculatedStudentScore += scoreEarned;
+                            bool teacherProvidedPoints = qData.Points > 0;
+                            float pointsToUse = teacherProvidedPoints ? qData.Points : (detail.Method == "gemini" ? (detail.MaxGrade ?? 1.0f) : 1.0f);
                             
-                            enrichedDetails.Add(detail with { 
-                                Points = detail.MaxGrade.Value, 
+                            if (!teacherProvidedPoints) totalMaxPoints += pointsToUse;
+                            
+                            float earned = detail.Method == "gemini" ? (detail.StudentScore ?? (detail.IsCorrect ? pointsToUse : 0f)) : (detail.IsCorrect ? pointsToUse : 0f);
+                            totalRecalculatedScore += earned;
+
+                            allEnrichedDetails.Add(detail with { 
+                                Points = pointsToUse, 
                                 Options = qData.Options,
                                 QuestionType = qData.Type,
                                 Type = qData.Type ?? detail.Type
@@ -236,117 +244,72 @@ public class ExamAiService(
                         }
                         else
                         {
-                            float finalQuestionPointsToUse = teacherProvidedPoints ? qData.Points : 1.0f;
-                            if (!teacherProvidedPoints) {
-                                thisStudentMaxQuestions += 1.0f;
-                            }
-                            
-                            recalculatedStudentScore += detail.IsCorrect ? finalQuestionPointsToUse : 0f;
-                            
-                            enrichedDetails.Add(detail with { 
-                                Points = finalQuestionPointsToUse, 
-                                Options = qData.Options,
-                                QuestionType = qData.Type,
-                                Type = qData.Type ?? detail.Type
-                            });
+                            float pointsToUse = detail.Method == "gemini" ? (detail.MaxGrade ?? 1.0f) : 1.0f;
+                            totalMaxPoints += pointsToUse;
+                            float earned = detail.Method == "gemini" ? (detail.StudentScore ?? (detail.IsCorrect ? pointsToUse : 0f)) : (detail.IsCorrect ? pointsToUse : 0f);
+                            totalRecalculatedScore += earned;
+                            allEnrichedDetails.Add(detail with { Points = pointsToUse });
                         }
-                    } else {
-                        float finalQuestionPointsToUse = 1.0f;
-                        float scoreEarned = detail.IsCorrect ? 1.0f : 0f;
-
-                        if (detail.Method == "gemini" && detail.MaxGrade.HasValue) 
-                        {
-                            finalQuestionPointsToUse = detail.MaxGrade.Value;
-                            scoreEarned = detail.StudentScore ?? (detail.IsCorrect ? finalQuestionPointsToUse : 0f);
-                        }
-                        
-                        thisStudentMaxQuestions += finalQuestionPointsToUse;
-                        recalculatedStudentScore += scoreEarned;
-                        enrichedDetails.Add(detail with { Points = finalQuestionPointsToUse });
                     }
                 }
 
-                // 7️⃣ Save to Database
+                // 3. Save Combined Data to Database
                 StudentExamPaper? studentExam = null;
-                
-                // If it's a known student's paper, we check if they already have a paper for this exam to update it.
-                // If it's an unknown student, we always create a new paper record so they don't overwrite each other.
                 if (!isUnknownStudent)
                 {
                     studentExam = await _context.StudentExamPapers.IgnoreQueryFilters()
                         .FirstOrDefaultAsync(s => s.ExamId == examId && s.StudentId == studentId);
                 }
 
-                if (studentExam != null) {
-                    studentExam.FinalScore = recalculatedStudentScore;
-                    studentExam.TotalQuestions = Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions);
-                    studentExam.QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails);
-                    studentExam.AnnotatedImageUrl = res.AnnotatedImageUrl;
-                } else {
-                    if (examObj != null) {
-                        studentExam = new StudentExamPaper {
-                            ExamId = examId, StudentId = studentId, OwnerId = examObj.OwnerId,
-                            FinalScore = recalculatedStudentScore, TotalQuestions = Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions),
-                            QuestionDetailsJson = JsonSerializer.Serialize(enrichedDetails),
-                            GeneratedAt = DateTime.Now, GeneratedPdfPath = file.FileName,
-                            AnnotatedImageUrl = res.AnnotatedImageUrl
-                        };
-                        _context.StudentExamPapers.Add(studentExam);
-                    }
-                }
+                string combinedImages = string.Join("|", pages
+                    .Select(p => p.AnnotatedImageUrl)
+                    .Where(u => !string.IsNullOrEmpty(u))
+                    .Select(u => u!.StartsWith("http") ? u : $"{BaseUrl}/{u.TrimStart('/')}"));
+                float finalMax = Math.Max(totalExamPointsByTeacher, totalMaxPoints);
 
+                if (studentExam != null)
+                {
+                    studentExam.FinalScore = totalRecalculatedScore;
+                    studentExam.TotalQuestions = finalMax;
+                    studentExam.QuestionDetailsJson = JsonSerializer.Serialize(allEnrichedDetails);
+                    studentExam.AnnotatedImageUrl = combinedImages;
+                    studentExam.GeneratedAt = DateTime.Now; // Update time to move to top of table
+                }
+                else
+                {
+                    studentExam = new StudentExamPaper
+                    {
+                        ExamId = examId, StudentId = studentId, OwnerId = examObj!.OwnerId,
+                        FinalScore = totalRecalculatedScore, TotalQuestions = finalMax,
+                        QuestionDetailsJson = JsonSerializer.Serialize(allEnrichedDetails),
+                        GeneratedAt = DateTime.Now, GeneratedPdfPath = file.FileName,
+                        AnnotatedImageUrl = combinedImages
+                    };
+                    _context.StudentExamPapers.Add(studentExam);
+                }
                 await _context.SaveChangesAsync();
 
-                // 8️⃣ Prepare Result for UI
+                // 4. Prepare Result for UI
                 var student = await _context.Students.FindAsync(studentId);
-                examResults.Add(new McqResultDto(
-                    res.Filename,
+                finalMergedResults.Add(new McqResultDto(
+                    firstPage.Filename,
                     new StudentInfoDto(studentId.ToString(), student?.FullName ?? "Unknown"),
-                    new McqDetailsDto(recalculatedStudentScore, Math.Max(totalExamPointsByTeacher, thisStudentMaxQuestions), enrichedDetails),
-                    res.AnnotatedImageUrl.StartsWith("http") ? res.AnnotatedImageUrl : $"{BaseUrl}/{res.AnnotatedImageUrl.TrimStart('/')}",
+                    new McqDetailsDto(totalRecalculatedScore, finalMax, allEnrichedDetails),
+                    combinedImages,
                     examId,
-                    studentExam?.Id
+                    studentExam.Id
                 ));
             }
 
-            // 9️⃣ Update Quota if required
+            // 9️⃣ Update Quota
             if (isSubscriptionRequired)
             {
                 var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == _userContext.UserId);
-                if (user != null && examResults.Count > 0)
+                if (user != null && finalMergedResults.Count > 0)
                 {
-                    user.UsedPages += examResults.Count;
+                    user.UsedPages += mcqData.Results.Count; // Count actual pages processed
                     await _context.SaveChangesAsync();
                 }
-            }
-
-            // 9️⃣ Merge results into students based on the ACTUAL NumberOfPages of the exam
-            var finalMergedResults = new List<McqResultDto>();
-            int numberOfPages = examObj?.NumberOfPages ?? 1;
-
-            for (int i = 0; i < examResults.Count; i += numberOfPages)
-            {
-                var chunk = examResults.Skip(i).Take(numberOfPages).ToList();
-                if (!chunk.Any()) break;
-
-                var first = chunk.First();
-                var allDetails = chunk.SelectMany(r => r.Details.Details).ToList();
-                float totalScore = chunk.Sum(r => r.Details.Score);
-                float maxTotalPoints = chunk.Max(r => r.Details.Total);
-                
-                // Join all images with a pipe '|' to support multi-page display in UI
-                string combinedImages = string.Join("|", chunk
-                    .Select(r => r.AnnotatedImageUrl)
-                    .Where(u => !string.IsNullOrEmpty(u)));
-
-                finalMergedResults.Add(new McqResultDto(
-                    first.Filename,
-                    first.StudentInfo,
-                    new McqDetailsDto(totalScore, maxTotalPoints, allDetails),
-                    combinedImages,
-                    first.ExamId,
-                    first.PaperId
-                ));
             }
 
             return Result.Success(new ExamResultsDto(finalMergedResults));
