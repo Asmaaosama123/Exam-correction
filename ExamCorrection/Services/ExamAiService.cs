@@ -181,7 +181,8 @@ public class ExamAiService(
                 if (studentId == 0)
                 {
                     // AI might have extracted a name and class even if no barcode ID was found
-                    string aiName = pages.FirstOrDefault(p => p.StudentInfo != null && !string.IsNullOrEmpty(p.StudentInfo.StudentName))?.StudentInfo.StudentName ?? "";
+                    string aiName = pages.FirstOrDefault(p => p.StudentInfo != null && !string.IsNullOrEmpty(p.StudentInfo.StudentName))?.StudentInfo.StudentName?.Trim() ?? "";
+                    if (aiName.Equals("unknown", StringComparison.OrdinalIgnoreCase) || aiName.Equals("null", StringComparison.OrdinalIgnoreCase)) aiName = "";
                     
                     var unknownClassName = "أوراق بدون باركود";
                     var teacherClass = await _context.Classes.FirstOrDefaultAsync(c => c.OwnerId == _userContext.UserId && c.Name == unknownClassName);
