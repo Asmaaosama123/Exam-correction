@@ -16,9 +16,12 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
         {
             // Log 400-499 errors (Validation, Conflict, NotFound, etc. from Result.Failure)
             // Also log if StatusCode is null (meaning it wasn't explicitly set but is still a ProblemDetails)
-            if (objectResult.StatusCode == null || (objectResult.StatusCode >= 400 && objectResult.StatusCode < 500))
+            // Log 400-499 errors for users who are already logged in (after entering the site)
+            if (context.HttpContext.User?.Identity?.IsAuthenticated == true && 
+                (objectResult.StatusCode == null || (objectResult.StatusCode >= 400 && objectResult.StatusCode < 500)))
             {
-                var userId = context.HttpContext.User?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                var userId = context.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                var loginIdentifier = "";
                 
                 // 1. Extract custom Errors (from ResultExtensions)
                 if (problem.Extensions.TryGetValue("errors", out var errorsObj) && errorsObj is Array errors)
@@ -30,7 +33,7 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
                         var code = type.GetProperty("Code")?.GetValue(err)?.ToString() ?? "UNKNOWN_CODE";
                         var description = type.GetProperty("Description")?.GetValue(err)?.ToString() ?? "No description provided";
                         
-                        await systemLogService.LogErrorAsync(description, $"Code: {code}", "BUSINESS_LOGIC", userId);
+                        await systemLogService.LogErrorAsync(description + loginIdentifier, $"Code: {code}", "BUSINESS_LOGIC", userId);
                     }
                 }
                 // 2. Extract standard Validation Errors (ModelState/ValidationProblemDetails)
@@ -42,7 +45,7 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
                         foreach (var errorMessage in keyValuePair.Value)
                         {
                             await systemLogService.LogErrorAsync(
-                                $"خطأ في إدخال بيانات: {errorMessage}", 
+                                $"خطأ في إدخال بيانات: {errorMessage}" + loginIdentifier, 
                                 $"Field: {field}", 
                                 "VALIDATION_ERROR", 
                                 userId
@@ -53,7 +56,7 @@ public class BusinessErrorLoggingFilter(ISystemLogService systemLogService) : IA
                 // 3. Fallback for other ProblemDetails
                 else if (!string.IsNullOrEmpty(problem.Title))
                 {
-                    await systemLogService.LogErrorAsync(problem.Title, problem.Detail ?? string.Empty, "BUSINESS_LOGIC", userId);
+                    await systemLogService.LogErrorAsync(problem.Title + loginIdentifier, problem.Detail ?? string.Empty, "BUSINESS_LOGIC", userId);
                 }
             }
         }

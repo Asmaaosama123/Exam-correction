@@ -94,14 +94,20 @@ public class ReportsController(IReportService reportService) : ControllerBase
     [HttpGet("export-corrected-papers-pdf")]
     public async Task<IActionResult> ExportCorrectedPapersPdf([FromQuery] int examId, [FromQuery] string? teacherId = null, [FromQuery] int? classId = null)
     {
-        var result = await _reportService.ExportCorrectedPapersPdfAsync(examId, teacherId, classId);
+        try 
+        {
+            var result = await _reportService.ExportCorrectedPapersPdfAsync(examId, teacherId, classId);
 
-        if (!result.IsSuccess)
-            return BadRequest(result.Error);
+            if (!result.IsSuccess)
+                return BadRequest(new { Message = result.Error.Description, Code = result.Error.Code });
 
-        var (fileContent, fileName) = result.Value;
-
-        return File(fileContent, "application/pdf", fileName);
+            var (fileContent, fileName) = result.Value;
+            return File(fileContent, "application/pdf", fileName);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "حدث خطأ في توليد ملف الـ PDF", Error = ex.Message });
+        }
     }
 
     [HttpGet("export-corrected-papers-zip")]

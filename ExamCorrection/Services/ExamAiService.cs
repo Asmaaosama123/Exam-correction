@@ -302,15 +302,27 @@ public class ExamAiService(
                 ));
             }
 
-            // 9️⃣ Update Quota
-            if (isSubscriptionRequired)
+            // 9️⃣ Update Quota & Free Pages
+            var userUpdate = await _context.Users.FirstOrDefaultAsync(u => u.Id == _userContext.UserId);
+            if (userUpdate != null && finalMergedResults.Count > 0)
             {
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == _userContext.UserId);
-                if (user != null && finalMergedResults.Count > 0)
+                int pageCount = mcqData.Results.Count;
+                
+                if (isSubscriptionRequired)
                 {
-                    user.UsedPages += mcqData.Results.Count; // Count actual pages processed
-                    await _context.SaveChangesAsync();
+                    userUpdate.UsedPages += pageCount; // Count against quota
                 }
+                
+                // Track free pages: system-wide free mode OR teacher is not subscribed (trial pages)
+                if (!isSubscriptionRequired || !userUpdate.IsSubscribed)
+                {
+                    userUpdate.FreePagesCount += pageCount;
+                }
+
+                // Always track total corrected count (historical)
+                userUpdate.TotalCorrectedCount += pageCount;
+                
+                await _context.SaveChangesAsync();
             }
 
             return Result.Success(new ExamResultsDto(finalMergedResults));

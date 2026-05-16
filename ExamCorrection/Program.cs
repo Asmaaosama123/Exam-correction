@@ -39,6 +39,13 @@ using (var scope = app.Services.CreateScope())
     }
     catch { }
 
+    try
+    {
+        // Fix existing exams that should be marked as barcode exams
+        dbContext.Database.ExecuteSqlRaw("UPDATE Exams SET IsBarcode = 1 WHERE IsBarcode = 0 AND Id IN (SELECT ExamId FROM ExamPages);");
+    }
+    catch { }
+
 
 
     // 1. Ensure Roles Exist

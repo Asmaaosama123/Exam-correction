@@ -412,7 +412,7 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
 
         if (classId.HasValue)
         {
-            query = query.Where(x => x.Student.ClassId == classId.Value);
+            query = query.Where(x => x.Student != null && x.Student.ClassId == classId.Value);
         }
 
         if (_userContext.IsAdmin)
@@ -428,11 +428,24 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
         }
 
         var results = await query
-            .OrderBy(x => x.Student.FullName)
+            .OrderBy(x => x.StudentId == null ? "" : x.Student.FullName)
             .ToListAsync();
 
         if (results.Count == 0)
-            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("NoImages", "لا توجد أوراق مصححة لهذا الاختبار.", StatusCodes.Status404NotFound));
+        {
+            // If no corrected papers, return the original exam template PDF
+            if (!string.IsNullOrEmpty(exam.PdfPath))
+            {
+                var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", exam.PdfPath.TrimStart('/', '\\'));
+                if (System.IO.File.Exists(fullPath))
+                {
+                    var content = await System.IO.File.ReadAllBytesAsync(fullPath);
+                    var templateName = $"{exam.Title}_Template.pdf";
+                    return Result.Success((content, templateName));
+                }
+            }
+            return Result.Failure<(byte[] FileContent, string FileName)>(new Error("NoImages", "لا توجد أوراق مصححة ولا يوجد ملف أصلي متاح لهذا الاختبار.", StatusCodes.Status404NotFound));
+        }
 
         using var ms = new MemoryStream();
         using (var writer = new iText.Kernel.Pdf.PdfWriter(ms))
@@ -456,10 +469,11 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                 var teacherName = result.User != null ? $"{result.User.FirstName} {result.User.LastName}" : "Unknown";
                 var teacherInfo = isAdmin ? $" | المعلم: {teacherName}" : "";
                 
+                var studentName = result.Student?.FullName ?? "طالب غير معروف";
                 var headerParagraph = new iText.Layout.Element.Paragraph()
-                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($"الطالب: {result.Student.FullName}"))
+                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($"الطالب: {studentName}"))
                         .SetFont(font).SetFontSize(11).SetBold())
-                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($" | الدرجة: {result.FinalScore} / {result.TotalQuestions}"))
+                    .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape($" | الدرجة: {result.TotalQuestions} / {result.FinalScore}"))
                         .SetFont(font).SetFontSize(11).SetBold())
                     .Add(new iText.Layout.Element.Text(ArabicTextShaper.Shape(teacherInfo))
                         .SetFont(font).SetFontSize(9))
@@ -481,17 +495,46 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                     else
                     {
                         var baseUrl = _configuration["ExamCorrectionAiModel:BaseUrl"]?.TrimEnd('/');
+                        
+                        // محاولة 1: من سيرفر الذكاء الاصطناعي
                         if (!string.IsNullOrEmpty(baseUrl))
                         {
+                            try {
                             var fullImageUrl = $"{baseUrl}/{imageUrl.TrimStart('/')}";
                             using var httpClient = new HttpClient();
                             httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
                             imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
+                            
+                            // ✅ حفظ الصورة محلياً للأبد لضمان عدم ضياعها لاحقاً
+                            try {
+                                var localSavePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
+                                var directory = Path.GetDirectoryName(localSavePath);
+                                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) 
+                                    Directory.CreateDirectory(directory);
+                                
+                                await File.WriteAllBytesAsync(localSavePath, imageBytes);
+                            } catch { /* فشل الحفظ المحلي لا يعطل توليد الـ PDF */ }
+                            
+                        } catch { /* ننتقل للمحاولة التالية */ }
                         }
-                        else
+
+                        // محاولة 2: محلياً من مجلد المشروع (wwwroot)
+                        if (imageBytes == null)
                         {
                             var localPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imageUrl.TrimStart('/'));
                             if (File.Exists(localPath)) imageBytes = await File.ReadAllBytesAsync(localPath);
+                        }
+                        
+                        // محاولة 3: من السيرفر الرئيسي (بدون بورت 8000) إذا وجد
+                        if (imageBytes == null && !string.IsNullOrEmpty(baseUrl))
+                        {
+                            try {
+                                var uri = new Uri(baseUrl);
+                                var mainServerUrl = $"{uri.Scheme}://{uri.Host}";
+                                var fullImageUrl = $"{mainServerUrl}/{imageUrl.TrimStart('/')}";
+                                using var httpClient = new HttpClient();
+                                imageBytes = await httpClient.GetByteArrayAsync(fullImageUrl);
+                            } catch { /* فشل الكل */ }
                         }
                     }
 
@@ -506,14 +549,15 @@ public class ReportService(ApplicationDbContext context, IConfiguration configur
                     }
                     else
                     {
-                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تعذر العثور على صورة الورقة"))
-                            .SetFont(font).SetFontSize(10).SetItalic().SetTextAlignment(TextAlignment.CENTER));
+                        Console.WriteLine($"[DEBUG] Image NOT FOUND in any location for Student: {studentName}. Path: {imageUrl}");
+                        document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape("تعذر العثور على صورة الورقة (404)"))
+                            .SetFont(font).SetFontSize(10).SetItalic().SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                     }
                 }
                 catch (Exception ex)
                 {
                     document.Add(new iText.Layout.Element.Paragraph(ArabicTextShaper.Shape($"خطأ في تحميل الصورة: {ex.Message}"))
-                        .SetFont(font).SetFontSize(8).SetTextAlignment(TextAlignment.CENTER));
+                        .SetFont(font).SetFontSize(8).SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER));
                 }
 
                 // Separator or Page Break

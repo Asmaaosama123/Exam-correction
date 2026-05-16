@@ -98,6 +98,7 @@ public class ExamService : IExamService
                 Y = defaultY,
                 NameMarkData = request.NameMarkData ?? string.Empty,
                 FiducialsData = request.FiducialsData ?? string.Empty,
+                IsBarcode = !string.IsNullOrEmpty(request.BarcodeData)
             };
 
             _context.Exams.Add(exam);

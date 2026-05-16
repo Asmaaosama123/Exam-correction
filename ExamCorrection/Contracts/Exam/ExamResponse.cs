@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Contracts.Exam;
+namespace ExamCorrection.Contracts.Exam;
 
 public record ExamResponse(
     int Id,
@@ -7,5 +7,6 @@ public record ExamResponse(
     string PdfPath,
     int NumberOfPages,
     DateTime CreatedAt,
-    string OwnerId
+    string OwnerId,
+    bool IsBarcode
 );

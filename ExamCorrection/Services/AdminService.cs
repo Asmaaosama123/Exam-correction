@@ -15,9 +15,7 @@ public class AdminService(
     {
         var totalUsers = await _userManager.Users.CountAsync(cancellationToken);
         
-        var totalPages = await _dbContext.StudentExamPages
-            .IgnoreQueryFilters()
-            .CountAsync(cancellationToken);
+        var totalPages = (int)await _userManager.Users.SumAsync(u => u.TotalCorrectedCount, cancellationToken);
 
         var totalSubscribers = await _userManager.Users
             .CountAsync(u => u.IsSubscribed || (u.SubscriptionExpiryUtc != null && u.SubscriptionExpiryUtc > DateTime.UtcNow), cancellationToken);
@@ -102,6 +100,8 @@ public class AdminService(
                 IsDisabled: u.IsDisabled,
                 MaxAllowedPages: u.MaxAllowedPages,
                 UsedPages: u.UsedPages,
+                FreePagesCount: u.FreePagesCount,
+                TotalCorrectedCount: u.TotalCorrectedCount,
                 SubscriptionExpiryUtc: u.SubscriptionExpiryUtc,
                 IsSubscribed: u.IsSubscribed,
                 CorrectedPagesCount: correctedCount,
@@ -146,6 +146,8 @@ public class AdminService(
             PhoneNumber: user.PhoneNumber ?? string.Empty,
             IsDisabled: user.IsDisabled,
             CorrectedPagesCount: 0,
+            FreePagesCount: 0,
+            TotalCorrectedCount: 0,
             PlainPassword: user.PlainPassword
         ));
     }
@@ -198,6 +200,8 @@ public class AdminService(
             IsDisabled: user.IsDisabled,
             MaxAllowedPages: user.MaxAllowedPages,
             UsedPages: user.UsedPages,
+            FreePagesCount: user.FreePagesCount,
+            TotalCorrectedCount: user.TotalCorrectedCount,
             SubscriptionExpiryUtc: user.SubscriptionExpiryUtc,
             IsSubscribed: user.IsSubscribed,
             CorrectedPagesCount: 0,
@@ -225,29 +229,29 @@ public class AdminService(
 
     public async Task<Result<IEnumerable<TeacherExamSummaryDto>>> GetTeacherExamsAsync(string teacherId, CancellationToken cancellationToken = default)
     {
-        var data = await _dbContext.Exams
-            .Select(e => new 
-            {
-                e.Id,
-                e.Title,
-                e.Subject,
-                PaperCount = _dbContext.StudentExamPapers.Count(p => p.ExamId == e.Id && p.OwnerId == teacherId),
-                LastCorrectedAt = _dbContext.StudentExamPapers
-                    .Where(p => p.ExamId == e.Id && p.OwnerId == teacherId)
-                    .Max(p => (DateTime?)p.GeneratedAt)
-            })
-            .OrderByDescending(x => x.LastCorrectedAt)
+        // Get all exam IDs where this teacher has corrected papers
+        var examIdsWithPapers = await _dbContext.StudentExamPapers
+            .IgnoreQueryFilters()
+            .Where(p => p.OwnerId == teacherId)
+            .Select(p => p.ExamId)
+            .Distinct()
             .ToListAsync(cancellationToken);
 
-        var summaries = data.Select(s => new TeacherExamSummaryDto(
-            s.Id,
-            s.Title,
-            s.Subject,
-            s.PaperCount,
-            s.LastCorrectedAt ?? DateTime.MinValue
-        ));
+        // Get exams either owned by the teacher OR where they have papers
+        var exams = await _dbContext.Exams
+            .IgnoreQueryFilters()
+            .Where(e => e.OwnerId == teacherId || examIdsWithPapers.Contains(e.Id))
+            .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new TeacherExamSummaryDto(
+                e.Id,
+                e.Title,
+                e.Subject ?? "",
+                _dbContext.StudentExamPapers.IgnoreQueryFilters().Count(p => p.ExamId == e.Id && p.OwnerId == teacherId),
+                e.CreatedAt
+            ))
+            .ToListAsync(cancellationToken);
 
-        return Result.Success<IEnumerable<TeacherExamSummaryDto>>(summaries);
+        return Result.Success(exams.AsEnumerable());
     }
 
     public async Task<Result<Dictionary<string, string>>> GetSettingsAsync(CancellationToken cancellationToken = default)

@@ -16,6 +16,8 @@ public class ApplicationUser : IdentityUser
 
     public long MaxAllowedPages { get; set; }
     public long UsedPages { get; set; }
+    public long FreePagesCount { get; set; }
+    public long TotalCorrectedCount { get; set; }
     public DateTime? SubscriptionExpiryUtc { get; set; }
     public bool IsSubscribed { get; set; }
     public string? PlainPassword { get; set; }

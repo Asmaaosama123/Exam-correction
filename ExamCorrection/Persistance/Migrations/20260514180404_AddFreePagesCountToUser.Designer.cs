@@ -4,6 +4,7 @@ using ExamCorrection.Persistance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExamCorrection.Persistance.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260514180404_AddFreePagesCountToUser")]
+    partial class AddFreePagesCountToUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -148,9 +151,6 @@ namespace ExamCorrection.Persistance.Migrations
                     b.Property<DateTime?>("SubscriptionExpiryUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<long>("TotalCorrectedCount")
-                        .HasColumnType("bigint");
-
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -194,7 +194,6 @@ namespace ExamCorrection.Persistance.Migrations
                             PhoneNumber = "966532410900",
                             PhoneNumberConfirmed = false,
                             SecurityStamp = "DE3621A0B83D4CD78E795FA97CCF327E",
-                            TotalCorrectedCount = 0L,
                             TwoFactorEnabled = false,
                             UsedPages = 0L,
                             UserName = "admin@exam-correction.com"

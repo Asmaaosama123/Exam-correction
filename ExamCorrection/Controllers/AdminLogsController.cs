@@ -35,7 +35,7 @@ public class AdminLogsController(ISystemLogService systemLogService) : Controlle
             d.CreatedAt,
             d.IsResolved,
             d.OwnerId,
-            UserFullName = d.User != null ? $"{d.User.FirstName} {d.User.LastName}".Trim() : "System/Unknown"
+            UserFullName = d.User != null ? $"{d.User.FirstName} {d.User.LastName}".Trim() : (string.IsNullOrWhiteSpace(d.OwnerId) ? "System/Unknown" : d.OwnerId)
         });
 
         return Ok(result);
