@@ -1,4 +1,4 @@
-﻿namespace ExamCorrection.Services;
+namespace ExamCorrection.Services;
 
 public interface IAuthService
 {
@@ -9,4 +9,5 @@ public interface IAuthService
     //Task<Result> ResendConfirmationEmailAsync(ResendConfirmationEmailRequest request);
     //Task<Result> SendResetPasswordCodeAsync(string email);
     //Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
+    Task<Result<AuthResponse>> GenerateTokenForUserAsync(string userId, CancellationToken cancellationToken = default);
 }

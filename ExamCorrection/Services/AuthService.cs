@@ -262,6 +262,35 @@ public class AuthService(UserManager<ApplicationUser> userManager, IJwtProvider 
     private static string GenerateRefreshToken() =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
+    public async Task<Result<AuthResponse>> GenerateTokenForUserAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+
+        if (user is null)
+            return Result.Failure<AuthResponse>(UserErrors.InvalidCredentials);
+
+        if (user.IsDisabled)
+            return Result.Failure<AuthResponse>(UserErrors.DisabledUser);
+
+        var userRoles = await _userManager.GetRolesAsync(user);
+
+        var (token, expiresIn) = _jwtProvider.GenerateToken(user, userRoles);
+        var refreshToken = GenerateRefreshToken();
+        var refreshTokenExpiration = DateTime.UtcNow.AddDays(_refreshTokenExpiryDays);
+
+        user.RefreshTokens.Add(new RefreshToken
+        {
+            Token = refreshToken,
+            ExpiresOn = refreshTokenExpiration
+        });
+
+        await _userManager.UpdateAsync(user);
+
+        var response = new AuthResponse(user.Id, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration, userRoles);
+
+        return Result.Success(response);
+    }
+
     //private async Task SendConfirmationEmail(ApplicationUser user, string code)
     //{
     //    var origin = _httpContextAccessor.HttpContext?.Request.Headers.Origin;
