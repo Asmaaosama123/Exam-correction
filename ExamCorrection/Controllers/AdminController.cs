@@ -61,6 +61,13 @@ public class AdminController(IAdminService adminService) : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
     }
 
+    [HttpPost("users/{userId}/login-as")]
+    public async Task<IActionResult> LoginAsUser([FromServices] IAuthService authService, [FromRoute] string userId, CancellationToken cancellationToken)
+    {
+        var result = await authService.GenerateTokenForUserAsync(userId, cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblem();
+    }
+
     [HttpGet("settings")]
     public async Task<IActionResult> GetSettings(CancellationToken cancellationToken)
     {
